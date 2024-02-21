@@ -52,15 +52,83 @@ Camera.mainCamera.screenSize = GameEngine.getResolution();   // 메인 카메라
 
 
 ``` js
-const steve     = GameObject.instantiate();
-const steveMesh = new Mesh();
-const steveTex  = new Texture("./resource/steve3d.png", GameEngine.initialize);
+const steve     = GameObject.instantiate(); // 새로운 게임오브젝트를 생성한다.
+const steveMesh = new Mesh();               // 매시 생성
+const steveTex  = new Texture("./resource/steve3d.png", GameEngine.initialize); // 텍스쳐 생성.
+
+steve.renderer.mainTexture   = steveTex;  // 렌더러에 텍스쳐를 등록
+steve.renderer.mesh          = steveMesh; // 렌더러에 메시를 등록
+
+steveMesh.vertices = [ /* 생략 */ ]; // 정점(vertex)들의 목록을 메시에 등록
+steveMesh.uvs      = [ /* 생략 */ ]; // UV 좌표들의 목록을 메시에 등록
+steveMesh.indices  = [ /* 생략 */ ]; // 인덱스 버퍼를 등록. 
+
+steveMesh.collider = new BoxCollider(steveMesh); // 바운딩 볼륨. 절두체 컬링에 사용됩니다.
+
+// 본(Bone)들을 생성
+const pelvis   = new Bone(new Vector3(0, -1, 0) );     // 골반
+const rightArm = new Bone(new Vector3(1.5, 1.5, 0) );  // 우측팔
+const leftArm  = new Bone(new Vector3(-1.5, 1.5, 0) ); // 좌측팔
+const leftLeg  = new Bone(new Vector3(-0.5, -1, 0) );  // 좌측다리
+const rightLeg = new Bone(new Vector3(0.5, -1, 0) );   // 우측다리
+const spine    = new Bone();                           // 척추
+const neck     = new Bone(new Vector3(0, 2, 0) );      // 목
+
+// 본의 계층구조:
+//
+// ㄴpelvis
+//     ㄴleftLeg
+//     ㄴrightLeg
+//     ㄴspine
+//        ㄴneck
+//        ㄴleftArm
+//        ㄴrightArm
+
+rightArm.parent = spine;
+leftArm.parent  = spine;
+neck.parent     = spine;
+
+leftLeg.parent  = pelvis;
+rightLeg.parent = pelvis;
+spine.parent    = pelvis;
+
+const leftArmWeight  = new Weight(["LeftArm"], [1]);
+const rightArmWeight = new Weight(["RightArm"], [1]);
+const leftLegWeight  = new Weight(["LeftLeg"], [1]);
+const rightLegWeight = new Weight(["RightLeg"], [1]);
+const neckWeight     = new Weight(["Neck"], [1]);
+const pelvisWeight   = new Weight(["Pelvis"], [1]);
+const spineWeight    = new Weight(["Spine"], [1]);
+
+steveMesh.bones = [ /* 생략 */ ];
+steveMesh.weights = [ /* 생략 */ ];
+steve.update = ()=>{ /* 생략 */ };
 ```
-다음으로 `GameEngine.initialize` 를 호출해야 합니다. 이 함수를 호출해야 생성된 모든 `GameObject` <br>
-가 매 프레임마다 업데이트 및 렌더링 될 수 있습니다. `GameObject` 를 생성하려면 `GameObject.instantiate` <br>
-를 호출하면 됩니다. 
+다음으로 `GameObject` 를 생성해야 합니다. `GameObject` 를 생성하려면 `GameObject.instantiate` <br>
+를 호출하면 됩니다. 모든 `GameObject` 는 필수적으로 `Renderer` 인스턴스를 하나씩 가지고 있습니다. <br>
 
+`Renderer` 클래스는 `Camera.mainCamera` 의 정보를 바탕으로 주어진 `Mesh` 를 렌더링 하는 역할을 수행합니다. <br>
+이는 `Renderer.drawMesh` 함수를 호출하여 수행하며, 이를 드로콜(draw call)이 발생했다고 합니다. <br>
+즉, 렌더링 파이프 라인의 과정은 해당 함수에서 진행됩니다. 다만, 해당 함수는 `GameEngine.initialize` 를 호출한 후 <br>
+에는 `GameEngine` 에서 자동으로 호출해주므로 직접 호출할 필요가 없습니다.
 
+여기서 `GameEngine.initialize` 를 `Texture` 의 생성자에 넘겨주고 있는데, 이는 텍스처가 전부 로드가 되면 <br>
+호출될 콜백을 등록하는 것입니다. 일반적으로 자바스크립트에서 이미지를 로드하는 방식이 비동기 식으로 처리되기에 <br>
+이미지가 다 로드될 때까지 기다리게 하는 것이 많이 불편합니다. 그렇다고, 이렇게 하지 않으면 이미지가 언제 로드가 <br>
+완료되는지를 알 수가 없습니다. 그렇기에 여러 `Texture` 들을 로드해야 한다면:
 
+``` js
+let mainTex, subTex;
 
+mainTex = new Texture("./main_texutre.png", ()=>{
+  subTex = new Texture("./sub_texture.png", GameEngine.initialize);
+});
+```
+처럼 차례차례로 수행한 후, 마지막 텍스처 로드가 완료되었을 때, `GameEngine.initialize` 를 호출시키게 해야 합니다. <br>
+좋은 디자인은 아니지만(poor design), 해당 프로젝트에서는 이미지 파일 하나만 불러오면 되므로, 이 부분은 넘어가기로 했습니다. <br>
+이런 부분에서 또 C++ 이 그리워지는ㅠㅠ.
 
+`GameObject` 는 `update` 를 등록할 수 있으며, 등록한 콜백함수를 매 프레임마다 호출되도록 합니다. <br>
+여기 예제에서는 `GameEngine.getKeyDown` 등의 함수를 통해, 스티브의 트랜스폼을 갱신하고, <br>
+본을 움직이는 것으로 스켈레탈 애니메이션을 수행하도록 합니다. 나머지 부분들은 전부 초기화 코드에 해당하며, <br>
+결과는 아래와 같습니다:

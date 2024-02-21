@@ -36,6 +36,7 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 `Math.js` 모듈에는 `Vector3`, `Matrix4x4`, `Frustum` 을 포함한 모든 수학 관련 클래스 및 함수들이 정의되어 있으며, <br>
 `GameEngine.js` 에는 `GameEngine`, `Transform`, `CircleCollider`, `Bone` 등이 정의되어 있습니다. <br>
 마지막으로 `Renderer.js` 에는 `Renderer`, `Texture`, `Mesh` 등이 정의되어 있습니다. <br>
+아직 사원수나 본의 가중치를 구현하지 않았으며, 이는 나중에 추가할 예정입니다.
 
 <br>
 <br>

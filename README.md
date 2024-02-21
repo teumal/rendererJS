@@ -31,11 +31,19 @@ const result0 = u.add(v,w);       // u + v + w
 const result1 = u.add(v.sub(w) ); // u + (v-w)
 ```
 이렇게 해야 했던게 진짜 아니었던;; 이런거 보면 C++ 이 그리워지긴 하는데, 이런 특징들을 포기했을 때의 편의성이 너무 좋아서 ㅠㅠ <br>
-수학에 집중하기 위해 JS 를 선택하게 되었습니다. 
+수학에 집중하기 위해 JS 를 선택하게 되었습니다. <br>
+
+`Math.js` 모듈에는 `Vector3`, `Matrix4x4`, `Frustum` 을 포함한 모든 수학 관련 클래스 및 함수들이 정의되어 있으며, <br>
+`GameEngine.js` 에는 `GameEngine`, `Transform`, `CircleCollider`, `Bone` 등이 정의되어 있습니다. <br>
+마지막으로 `Renderer.js` 에는 `Renderer`, `Texture`, `Mesh` 등이 정의되어 있습니다. <br>
+
+<br>
+<br>
 
 ## Example
 
-여기서는 `main.js` 의 내용을 간략하게 설명합니다. 위에서도 언급했듯이, 각 클래스들의 기능이 완벽한 것은 아닙니다. 
+여기서는 `main.js` 의 내용을 간략하게 설명합니다. 위에서도 언급했듯이, 각 클래스들의 기능이 완벽한 것은 아닙니다. <br>
+그래도 편의를 위해 간략하게는 구현해봤습니다: 
 
 ``` js
 GameEngine.canvas = document.getElementById("canvas");       // 캔버스를 게임 엔진에 등록한다.
@@ -130,5 +138,20 @@ mainTex = new Texture("./main_texutre.png", ()=>{
 
 `GameObject` 는 `update` 를 등록할 수 있으며, 등록한 콜백함수를 매 프레임마다 호출되도록 합니다. <br>
 여기 예제에서는 `GameEngine.getKeyDown` 등의 함수를 통해, 스티브의 트랜스폼을 갱신하고, <br>
-본을 움직이는 것으로 스켈레탈 애니메이션을 수행하도록 합니다. 나머지 부분들은 전부 초기화 코드에 해당하며, <br>
-결과는 아래와 같습니다:
+본을 움직이는 것으로 스켈레탈 애니메이션을 수행하도록 합니다. 나머지 부분들은 전부 초기화 코드에 해당합니다.
+
+정점과 UV 좌표의 인덱스는 첨부된 그림을 참고하면 됩니다: <br>
+<img width=500 height=500 src="https://github.com/teumal/rendererJS/blob/main/%EC%A0%95%EC%A0%90%20%EB%B2%88%ED%98%B8.png?raw=true">
+<img width=500 height=500 src="https://github.com/teumal/rendererJS/blob/main/uv%20%EC%A2%8C%ED%91%9C.png?raw=true"><br>
+인덱스 버퍼에는 삼각형 하나를 이루는 세 점에서 사용할 정점과 인덱스를 연속적으로 배치해둡니다:
+
+``` js
+steveMesh.indices = [
+    0,1,3,  0,1,3, // 정면0, vertex0, vertex1, vertex2, uv0, uv1, uv2
+    1,2,3,  1,2,3, // 정면1, vertex0, vertex1, vertex2, uv0, uv1, uv2
+];
+```
+이때, 나열한 점들의 순서가 시계방향인지 반시계방향인지에 따라서 `backface culling` 를 적용할 수 있습니다. <br>
+물론, `Renderer.backfaceCulling` 속성을 설정하여 할지 안할지 여부 또한 결정 가능합니다. <br>
+최종 결과는 아래와 같습니다. `Mesh.boneVisible = true` 를 통해 본이 어떻게 되었는지 또한 보이도록 했습니다: <br>
+<img src="https://github.com/teumal/rendererJS/blob/main/%EC%98%88%EC%A0%9C%20%EA%B2%B0%EA%B3%BC.JPG?raw=true">

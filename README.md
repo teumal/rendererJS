@@ -156,3 +156,42 @@ steveMesh.indices = [
 물론, `Renderer.backfaceCulling` 속성을 설정하여 할지 안할지 여부 또한 결정 가능합니다. <br>
 최종 결과는 아래와 같습니다. `Mesh.boneVisible = true` 를 통해 본이 어떻게 되었는지 또한 보이도록 했습니다: <br>
 <img src="https://github.com/teumal/rendererJS/blob/main/%EC%98%88%EC%A0%9C%20%EA%B2%B0%EA%B3%BC.JPG?raw=true">
+
+## Example2
+
+이번 예제는 PMX (MikuMikuDance) 파일을 읽어들여, 다크소울의 보스인 **Sif, the GreatWolf** 를 렌더링합니다 <br>
+읽어들이는 과정에 대해서는 [Sif, the Greatwolf 렌더링](https://blog.naver.com/zmsdkemf8703/223367387865) 를 참고하시길 바랍니다. <br>
+여기서는 `Material` 에 대해 기술합니다. 머터리얼이 추가되면서, 이제 `GameObject` 생성후, 렌더러에 머터리얼을 주지 않으면 <br>
+
+``` js
+#vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 디폴트 정점 셰이더
+#fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };            // 디폴트 픽셀 셰이더
+```
+정점셰이더는 `finalMat` 를 적용하고, 픽셸 셰이더는 핑크색을 돌려주는 기본동작을 수행합니다. <br>
+고로 텍스쳐를 입히기 위해서는 `Material` 인스턴스를 생성한뒤, `renderer.material` <br>
+속성을 사용하여 넣어주어야 합니다:
+
+``` js
+sif.renderer.material = new Material();
+sif.renderer.material.triangleCount = sifMesh.triangleCount;
+```
+생성한 머터리얼은 `mainTex` 속성을 가지고 있으며, `Renderer.tex2D` 를 사용하여 메인 텍스쳐를 렌더링 하는 코드를 <br>
+가지고 있습니다. 머터리얼은 항상 `triangleCount` 에 영향을 끼칠 삼각형의 갯수를 설정해주어야 합니다. <br>
+이는 `materials` 을 사용해 서브 메시를 사용할때 사용됩니다. <br>
+
+위 예제에서 캐릭터는 3개의 머터리얼을 사용합니다. 고로, 아래와 같이 해줍니다:
+``` js
+const mat0 = new Material(); 
+const mat1 = new Material(); 
+const mat2 = new Material(); 
+
+mat0.triangleCount = 2928  / 3; 
+mat1.triangleCount = 14436 / 3;
+mat2.triangleCount = 21204 / 3;
+
+sif.renderer.materials = [mat0, mat1, mat2]; // 서브메시 사용
+```
+각 머터리얼들의 `triangleCount` 는 `Mesh.indices` 인덱스 버퍼의 각 삼각형들의 순서와 일치합니다. <br>
+고로, `mat0` 은 0 번째부터 978 번 삼각형까지 사용되며, `mat1` 은 979 번째 부터 5,791 번째 삼각형까지 사용됩니다. <br>
+
+<img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMSAg/MDAxNzA5MDM0NjgxMjUx.eRJSpHptCg87MaLSzZS2nT1VfkCTEckxYDs-lYFtjzIg.O3pjc4F38Bfe52d-gCltpzCQlmSwh_uFrQ0-bz_uorsg.JPEG/%EB%86%80%EB%9E%80_%EC%8B%9C%ED%94%84.JPG?type=w773">

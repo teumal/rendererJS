@@ -195,3 +195,4 @@ sif.renderer.materials = [mat0, mat1, mat2]; // 서브메시 사용
 고로, `mat0` 은 0 번째부터 978 번 삼각형까지 사용되며, `mat1` 은 979 번째 부터 5,791 번째 삼각형까지 사용됩니다. <br>
 
 <img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMSAg/MDAxNzA5MDM0NjgxMjUx.eRJSpHptCg87MaLSzZS2nT1VfkCTEckxYDs-lYFtjzIg.O3pjc4F38Bfe52d-gCltpzCQlmSwh_uFrQ0-bz_uorsg.JPEG/%EB%86%80%EB%9E%80_%EC%8B%9C%ED%94%84.JPG?type=w773">
+<img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMjMg/MDAxNzA5MDM0Njc0MDE2.iBJnmDzHr6dUDMhdEzduym46rMAssBOntQB062g4VDIg.5-GFU3fdTp9gXmKD-CPtT9D8kG_Nl0FH9x8bbNieur4g.JPEG/%EC%8B%9C%ED%94%84_%EB%B3%B8.JPG?type=w773">

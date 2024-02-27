@@ -102,17 +102,30 @@ export class Color {
     }
 }; 
 
+
+export class Material {
+    mainTex       = null; // 메인 텍스쳐
+    triangleCount = 1;    // 영향을 미칠 삼각형의 갯수. 
+
+    vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 정점 셰이더
+    fragmentShader = (uv,pos)=>{ return Renderer.tex2D(this.mainTex, uv); };     // 픽셀 셰이더
+}
+
+
 export class Renderer {
     static mode = false;
 
-    camera = Camera.mainCamera; 
-    mainTexture;
-    mesh;
+    camera      = Camera.mainCamera; 
+    mainTexture = null;
+    mesh        = null;
+
     wireFrameMode   = false; // 와이어 프레임으로 메시를 그릴지 여부
     backfaceCulling = true;  // 백페이스 컬링 적용 여부
 
-    vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); };
-    fragmentShader = (uv, pos)=>{ return this.tex2D(this.mainTexture, uv); };
+    #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 디폴트 정점 셰이더
+    #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };            // 디폴트 픽셀 셰이더
+
+    materials = null; // SubMesh 들을 위해 사용합니다. 
 
     static #testFunc = [
 
@@ -285,6 +298,18 @@ export class Renderer {
     ];
 
 
+    // uv 좌표에 있는 texture 의 색상을 얻어옵니다.
+    static tex2D(texture, uv) {
+        const x = MyMath.clamp(
+            Math.round(uv.x * texture.width), 0, texture.width-1
+        );
+        const y = MyMath.clamp(
+            Math.round(uv.y * texture.height), 0, texture.height-1
+        );
+        return texture.getColor(x,y);
+    }
+
+
     // 격자에 `from` 에서 `to` 를 잇는 선을 그립니다.
     // `from`, `to` 는 항상 월드 좌표계 위의 점이어야 합니다.
     drawLine2D(from, to, color="black") {
@@ -424,6 +449,9 @@ export class Renderer {
         const triangleList         = [];
         const backfaceCullingSaved = this.backfaceCulling;
 
+        let materialIndex  = 0; // 사용할 머터리얼의 인덱스
+        let materialAffect = 0; // 현재 머터리얼이 영향을 준 삼각형의 갯수
+
         // 메시를 이루는 삼각형들을 절두체에 꼭 맞도록,
         // 자른 후, `triangleList` 에 저장한다.
         for(let i=0; i<triangleCount; ++i) {
@@ -435,7 +463,7 @@ export class Renderer {
             if(this.mesh.type==MeshType.Skinned) {
                 
                 for(const p of [original.p0, original.p1, original.p2]) { // 세 정점들에 대해서 진행한다. 
-                    if(p.weight == null) continue;                         // 가중치가 존재하지 않으면, 스킵
+                    if(p.weight == null) continue;                        // 가중치가 존재하지 않으면, 스킵
 
                     const bones     = p.weight.bones;    // 이름들의 목록
                     const weights   = p.weight.weights;  // 가중치들의 목록
@@ -452,9 +480,10 @@ export class Renderer {
 
 
             // 정점 변환.  월드 좌표를 클립 좌표로 변환한다.
-            original.p0.position = this.vertexShader(original.p0.position, finalMat);
-            original.p1.position = this.vertexShader(original.p1.position, finalMat);
-            original.p2.position = this.vertexShader(original.p2.position, finalMat);
+            original.p0.position   = this.#vertexShader(original.p0.position, finalMat);
+            original.p1.position   = this.#vertexShader(original.p1.position, finalMat);
+            original.p2.position   = this.#vertexShader(original.p2.position, finalMat);
+            original.materialIndex = materialIndex;
             triangleList.push(original);
 
 
@@ -511,9 +540,10 @@ export class Renderer {
 
                         // 새로운 삼각형을 만들어 `list` 에 넣어준다.
                         triangleList.push({
-                            p0 : { position : p0.position.clone(),      uv : p0.uv.clone()      },
-                            p1 : { position : p1.position.clone(),      uv : p1.uv.clone()      },
-                            p2 : { position : p12Clip.position.clone(), uv : p12Clip.uv.clone() },
+                            p0            : { position : p0.position.clone(),      uv : p0.uv.clone()      },
+                            p1            : { position : p1.position.clone(),      uv : p1.uv.clone()      },
+                            p2            : { position : p12Clip.position.clone(), uv : p12Clip.uv.clone() },
+                            materialIndex : triangle.materialIndex
                         });
 
                         // 기존의 삼각형은 쪼개진 버전으로 갱신해준다.
@@ -525,11 +555,26 @@ export class Renderer {
                     }
                 }
             }
+
+
+            // 서브 메시를 사용하고, 현재 머터리얼이 정해진 수의 삼각형에게 영향을 주었다면,
+            // 이후의 삼각형들은 다음 머터리얼을 적용한다.
+            if(this.materials!=null && ++materialAffect == this.materials[materialIndex].triangleCount) {
+                materialAffect = 0;
+                materialIndex++;
+            }
         }
 
         // 쪼개진 삼각형들을 모두 그려준다.
         for(let i=0; i<triangleList.length; ++i) {
-            this.drawTriangle(triangleList[i]);
+            const t = triangleList[i];
+            
+            if(this.materials != null) {
+
+                this.drawTriangle(t, this.materials[t.materialIndex].fragmentShader);
+                continue;
+            }
+            this.drawTriangle(t, this.#fragmentShader);
         }
 
         // 백페이스 컬링 설정을 복구한다.
@@ -538,7 +583,8 @@ export class Renderer {
 
 
     // `triangle` 의 `p0-p1-p2` 가 이루는 삼각형을 픽셀화시킵니다.
-    drawTriangle(triangle) {
+    // 또한, 최종 픽셀을 결정하기 위한 `fragmentShader` 를 인자로 받습니다.
+    drawTriangle(triangle, fragmentShader) {
 
         // 클립 좌표계의 깊이값 보존
         const zPos0 = triangle.p0.position.w;
@@ -645,14 +691,8 @@ export class Renderer {
 
                     // UV 좌표 계산 후, 픽셀쉐이더 적용
                     const uvPos = uv0.mul(t0).add(uv1.mul(t1), uv2.mul(t2) ); // s*uv0 + t*uv1 + oneMinusST*uv2
-                    let   rgba  = this.fragmentShader(uvPos, p.toVector3(viewZ) );
+                    let   rgba  = fragmentShader(uvPos, p.toVector3(viewZ) );
 
-
-                    // 색상의 알파값이 0과 매우 근사하면, 무시한다.
-                    if(MyMath.equalInTolerance(rgba.a, 0)) {
-                       return;
-                    }
-                    
                     GameEngine.setPixel(p, rgba.toString());
                 }
             }
@@ -667,21 +707,26 @@ export class Renderer {
     }
 
 
-    // uv 좌표에 있는 texture 의 색상을 얻어옵니다.
-    tex2D(texture, uv) {
-        const x = MyMath.clamp(
-            Math.round(uv.x * texture.width), 0, texture.width-1
-        );
-        const y = MyMath.clamp(
-            Math.round(uv.y * texture.height), 0, texture.height-1
-        );
-        return texture.getColor(x,y);
+    // 머터리얼이 존재하지 않을 경우, 사용되는 디폴트 셰이더들을 얻습니다.
+    get defaultFragmentShader() { return this.#fragmentShader; }
+    get defaultVertexShader()   { return this.#vertexShader;   }
+
+
+    // 사용자 정의 머터리얼을 설정하거나 얻습니다. 해당 값은
+    // `materials[0]` 을 하는 것과 같습니다.
+    get material() { return this.materials[0]; }
+    set material(newMat) {
+        if(this.materials==null) {
+            this.materials = [];
+        }
+        this.materials[0] = newMat;
     }
 };
 
 
 export class Texture {
     static $cvs = document.createElement("canvas");
+    static $ctx = Texture.$cvs.getContext('2d', { willReadFrequently : true});
 
     $width; $height;
     $colorData;
@@ -695,12 +740,11 @@ export class Texture {
            Texture.$cvs.width  = this.$width  = image.width;
            Texture.$cvs.height = this.$height = image.height;
            
-           const ctx = Texture.$cvs.getContext('2d');
-           ctx.drawImage(image, 0, 0, this.$width, this.$height);
+           Texture.$ctx.drawImage(image, 0, 0, this.$width, this.$height);
 
            this.$colorData = [];
            const inv255    = 1 / 255;
-           const imageData = ctx.getImageData(0, 0, this.$width, this.$height).data;
+           const imageData = Texture.$ctx.getImageData(0, 0, this.$width, this.$height).data;
 
            for(let i=0; i<imageData.length; i+=4) {
               const R = imageData[i] * inv255;

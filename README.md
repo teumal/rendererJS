@@ -38,6 +38,9 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 마지막으로 `Renderer.js` 에는 `Renderer`, `Texture`, `Mesh` 등이 정의되어 있습니다. <br>
 아직 사원수나 본의 가중치를 구현하지 않았으며, 이는 나중에 추가할 예정입니다.
 
+**EDIT 24/03/05**: 가중치 적용 추가
+
+
 <br>
 <br>
 
@@ -196,3 +199,41 @@ sif.renderer.materials = [mat0, mat1, mat2]; // 서브메시 사용
 
 <img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMSAg/MDAxNzA5MDM0NjgxMjUx.eRJSpHptCg87MaLSzZS2nT1VfkCTEckxYDs-lYFtjzIg.O3pjc4F38Bfe52d-gCltpzCQlmSwh_uFrQ0-bz_uorsg.JPEG/%EB%86%80%EB%9E%80_%EC%8B%9C%ED%94%84.JPG?type=w773">
 <img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMjMg/MDAxNzA5MDM0Njc0MDE2.iBJnmDzHr6dUDMhdEzduym46rMAssBOntQB062g4VDIg.5-GFU3fdTp9gXmKD-CPtT9D8kG_Nl0FH9x8bbNieur4g.JPEG/%EC%8B%9C%ED%94%84_%EB%B3%B8.JPG?type=w773">
+
+스켈레탈 애니메이션의 경우, 애니메이션 그래프 등은 없고 대신 `update` 에서 `Math.sin` 등의 함수를 사용하여 <br>
+직접 구현해줄 수 있습니다:
+
+``` js
+const rightArm = sifMesh.bones["Bip01-R-Clavicle01"];
+const leftArm  = sifMesh.bones["Bip01-L-Clavicle01"];
+const tail     = sifMesh.bones["tail 1"];
+const rightLeg = sifMesh.bones["Bip01-R-Calf01"];
+const leftLeg  = sifMesh.bones["Bip01-L-Calf01"];
+
+const tailRotation     = Transform.toEuler(tail.transform.localRotation);
+const rightArmRotation = Transform.toEuler(rightArm.transform.localRotation);
+const leftArmRotation  = Transform.toEuler(leftArm.transform.localRotation);
+const rightLegRotation = Transform.toEuler(rightLeg.transform.localRotation);
+const leftLegRotation  = Transform.toEuler(leftLeg.transform.localRotation);
+let   rad              = 0;
+
+sif.update = ()=>{
+   // ...omitted..
+
+   // skeletal animation
+    const angle = Math.sin(rad += deltaTime*Math.PI) * 45;
+
+    tailRotation.y = angle;
+    rightArmRotation.x = angle;
+    leftArmRotation.x = -angle;
+    leftLegRotation.x = angle;
+    rightLegRotation.x = -angle;
+
+    leftArm.transform.localRotation = leftArmRotation;
+    rightArm.transform.localRotation = rightArmRotation;
+    leftLeg.transform.localRotation = leftLegRotation;
+    rightLeg.transform.localRotation = rightLegRotation;
+    tail.transform.localRotation = tailRotation;
+};
+```
+<img src="https://postfiles.pstatic.net/MjAyNDAzMDRfMjg0/MDAxNzA5NTI5NDI3OTg5.5-MrNU9KLpyfnu_kA5qHfaNw6VEy59MLXBdeVSctSG8g.YX2qfCm4g5He4oL179huryTFgiGz4p7iLw_w2ufDEWUg.JPEG/%EC%BA%A1%EC%B2%98.JPG?type=w773">

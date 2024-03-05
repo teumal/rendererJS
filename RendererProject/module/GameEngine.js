@@ -1,6 +1,6 @@
 import {Vector2, Vector3, Vector4, Matrix4x4} from "./MyMath.js";
 import * as MyMath from "./MyMath.js";
-import {Renderer, Mesh, Color, MeshType} from "./Renderer.js";
+import {Renderer, Mesh, Color, MeshType, Texture} from "./Renderer.js";
 
 export const KeyCode = {
     Left  : "ArrowLeft",
@@ -44,6 +44,8 @@ export class GameEngine {
 
     static #inputState = [];
     static #inputQueue = [];
+
+    static #textQueue = [];
     $cvs; $ctx; 
 
     // 캔버스의 해상도를 설정합니다.
@@ -87,31 +89,33 @@ export class GameEngine {
         window.addEventListener("keydown", (e)=>{
             const queue = GameEngine.#inputQueue;
             const state = GameEngine.#inputState;
+            const time  = Date.now();
 
             if(state[e.key]==undefined) {
-                state[e.key] = KeyState.None;
+                state[e.key] = { key: KeyState.None, time: time };
             }
-            if(state[e.key]==KeyState.None) {
-                state[e.key] = KeyState.KeyDown;
+            if(state[e.key].key==KeyState.None && state[e.key].time <= time) {
+                state[e.key] = { key: KeyState.KeyDown, time: time };
             }
-            queue.push(e.key);
+            queue.push({ key: e.key, time: time });
         });
         window.addEventListener("keyup", (e)=>{
             const queue = GameEngine.#inputQueue;
             const state = GameEngine.#inputState;
+            const time  = Date.now();
 
             if(state[e.key]==undefined) {
-                state[e.key] = KeyState.None;
+                state[e.key] = { key: KeyState.None, time: time };
             }
-            if(state[e.key]==KeyState.KeyPress) {
-                state[e.key] = KeyState.KeyUp;
+            if(state[e.key].key==KeyState.KeyPress && state[e.key].time <= time) {
+                state[e.key] = { key: KeyState.KeyUp, time: time };
             }
-            queue.push(e.key);
+            queue.push({ key: e.key, time: time });
         });
 
         const updateFn = (t)=>{
-            const queue = GameEngine.#inputQueue;
-            const state = GameEngine.#inputState;
+            const inputQueue = GameEngine.#inputQueue;
+            const inputState = GameEngine.#inputState;
 
             // deltaTime 을 계산합니다.
             GameEngine.#prevTimestamp = GameEngine.#curTimestamp;
@@ -122,34 +126,75 @@ export class GameEngine {
             GameObject.update();
             GameObject.render();
 
+            // textUI 를 그린다.
+            GameEngine.$ctx.fillStyle = 'black';
+
+            for(let i=0; i<GameEngine.#textQueue.length; ++i) {
+                const op = GameEngine.#textQueue[i];
+                GameEngine.$ctx.fillText(op.text, op.x, op.y);
+            }
+            GameEngine.#textQueue = [];
+
             // 입력정보를 갱신합니다.
-            for(let i=0; i<queue.length; ++i) {
-                const key   = queue[i];
-                const value = state[key];
-                
-                if(value==KeyState.KeyDown) {
-                    state[key] = KeyState.KeyPress;
+            for(let i=0; i<inputQueue.length; ++i) {
+                const event = inputQueue[i];
+                const state = inputState[event.key];
+
+                const prevState = state.key;
+
+                // 발생한 이벤트가 `KeyDown` 인 경우
+                if(state.key==KeyState.KeyDown && event.time >= state.time) {
+                    inputState[event.key] = { key: KeyState.KeyPress, time: event.time };
                 }
-                else if(value==KeyState.KeyUp) {
-                    state[key] = KeyState.None;
+
+                // 발생한 이벤트가 `KeyUp` 인 경우
+                else if(state.key==KeyState.KeyUp && event.time >= state.time) {
+                    inputState[event.key] = { key: KeyState.None, time: event.time };
                 }
             }
+            inputQueue.length = 0; // 큐를 비운다.
             window.requestAnimationFrame(updateFn);
         };
         updateFn(0);
     }
 
 
+    // 게임엔진에게 TextUI 를 그리라고 제출합니다.
+    static drawText(text, x, y) {
+        GameEngine.#textQueue.push({
+           text : text,
+           x : x,
+           y : y
+        });
+    }
+
+
     // 키를 눌렀는지 여부를 검사합니다.
-    static getKeyDown(keyCode) { return (GameEngine.#inputState[keyCode] & KeyState.KeyDown)!=0; }
+    static getKeyDown(keyCode) { 
+
+        if(GameEngine.#inputState[keyCode]==undefined) {
+            return false;
+        }
+        return (GameEngine.#inputState[keyCode].key & KeyState.KeyDown)!=0;
+    }
 
 
     // 키를 누르고 있는지 여부를 검사합니다.
-    static getKey(keyCode) { return (GameEngine.#inputState[keyCode] & (KeyState.KeyPress | KeyState.KeyDown))!=0; }
+    static getKey(keyCode) { 
+        if(GameEngine.#inputState[keyCode]==undefined) {
+            return false;
+        }
+        return (GameEngine.#inputState[keyCode].key & (KeyState.KeyPress | KeyState.KeyDown))!=0; 
+    }
 
 
     // 키를 뗐는지 여부를 검사합니다.
-    static getKeyUp(keyCode) { return (GameEngine.#inputState[keyCode] & KeyState.KeyUp)!=0; }
+    static getKeyUp(keyCode) { 
+        if(GameEngine.#inputState[keyCode]==undefined) {
+            return false;
+        }
+        return (GameEngine.#inputState[keyCode].key & KeyState.KeyUp)!=0;
+    }
 
 
     // 캔버스를 등록하거나, 얻습니다.
@@ -214,6 +259,18 @@ export class Transform {
             return invRoll.mulMat(invPitch, invYaw);
         }
         return yaw.mulMat(pitch, roll);
+    }
+
+
+    // `Transform.euler` 로 생성한 회전 행렬 `R` 을 
+    // 오일러각을 나타내는 `Vector3` 로 변환해 돌려줍니다.
+    static toEuler(R) {
+        const pitch = Math.asin(R.basisY.z);
+        const div   = 1 / Math.cos(pitch);
+        const yaw   = Math.asin(-R.basisX.z / div);
+        const roll  = Math.acos(R.basisY.y / div);
+
+        return new Vector3(pitch, yaw, roll);
     }
 
 
@@ -539,7 +596,7 @@ export class Transform {
 
 
 export class Camera {
-    static tileSize   = 50;
+    static tileSize   = 20;
     static mainCamera = new Camera();
     
     transform = new Transform();
@@ -1102,6 +1159,8 @@ export class Bone {
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
 
+    boneColor = 'black'; // 본의 색깔을 지정
+
     // 루트 본을 생성합니다. 
     constructor(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {
         this.bindPose = {
@@ -1192,8 +1251,8 @@ export class Bone {
 
     // 본의 스켈레탈 애니메이션을 적용하는 행렬을 돌려줍니다. 스켈레탈 애니메이션을 적용하기 위해,
     // bindPose^(-1) 을 적용하여 로컬 공간으로 이동시킵니다. 이후, parent.worldTransform * this.localTransform
-    // 을 적용하는 순서를 가집니다. 또한, 인자로 주어진 `weight` 값을 사용하여 `localTransform` 의 값을 보간합니다.
-    skeletal(weight) {
+    // 을 적용하는 순서를 가집니다. 
+    skeletal() {
         const pose = this.bindPose;
 
         const invBindPose = Transform.invTRS(pose.position, pose.scale, pose.rotation);
@@ -1235,6 +1294,8 @@ export class Bone {
 
             const bindPose = Transform.TRS(pose0.position, pose0.scale, pose0.rotation);
             finalMat = scale.mulMat(rotate, translate, bindPose, finalMat);
+
+            Bone.renderer.wireFrameColor = this.boneColor;
             Bone.renderer.drawMesh(finalMat);
         }
     }

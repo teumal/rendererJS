@@ -119,8 +119,9 @@ export class Renderer {
     mainTexture = null;
     mesh        = null;
 
-    wireFrameMode   = false; // 와이어 프레임으로 메시를 그릴지 여부
-    backfaceCulling = true;  // 백페이스 컬링 적용 여부
+    wireFrameColor  = 'black'; // 와이어 프레임의 선 색깔
+    wireFrameMode   = false;   // 와이어 프레임으로 메시를 그릴지 여부
+    backfaceCulling = true;    // 백페이스 컬링 적용 여부
 
     #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 디폴트 정점 셰이더
     #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };            // 디폴트 픽셀 셰이더
@@ -469,12 +470,16 @@ export class Renderer {
                     const weights   = p.weight.weights;  // 가중치들의 목록
                     const boneCount = p.weight.boneCount;
 
+                    let result = Vector3.zero; // 혼합된 결과
+
                     for(let i=0; i<boneCount; ++i) {
                         const bone   = this.mesh.bones[bones[i] ];
                         const weight = weights[i];
-                        const model  = bone.skeletal(weight);
-                        p.position   = model.mulVector(p.position);
+                        const model  = bone.skeletal();
+                        
+                        result = result.add(model.mulVector(p.position).mul(weight) ); // 각 본의 최종행렬을 적용후, 가중치를 곱한다.
                     }
+                    p.position = result.toVector4(1);
                 }
             }
 
@@ -612,9 +617,9 @@ export class Renderer {
 
         // 와이어 프레임 모드일 경우, 
         if(this.wireFrameMode) {
-            this.drawLine2D(triangle.p0.position, triangle.p1.position);
-            this.drawLine2D(triangle.p1.position, triangle.p2.position);
-            this.drawLine2D(triangle.p2.position, triangle.p0.position);
+            this.drawLine2D(triangle.p0.position, triangle.p1.position, this.wireFrameColor);
+            this.drawLine2D(triangle.p1.position, triangle.p2.position, this.wireFrameColor);
+            this.drawLine2D(triangle.p2.position, triangle.p0.position, this.wireFrameColor);
             return;
         }
 

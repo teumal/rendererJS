@@ -45,20 +45,24 @@ export class GameEngine {
     static #inputState = [];
     static #inputQueue = [];
 
-    static #textQueue = [];
+    static #textQueue  = [];
+    static #backBuffer = null;
     $cvs; $ctx; 
 
     // 캔버스의 해상도를 설정합니다.
     // 인자가 하나라면 `w` 를 Vector2 로 취급합니다.
     static setResolution(w,h) {
-
+        
         if(arguments.length==1) {
             this.$cvs.width  = w.x;
             this.$cvs.height = w.y;
             return;
         }
-        this.$cvs.width  = w;
-        this.$cvs.height = h;
+        else {
+            this.$cvs.width  = w;
+            this.$cvs.height = h;
+        }
+        this.#backBuffer = this.$ctx.getImageData(0,0,w,h);
     }
 
 
@@ -69,10 +73,18 @@ export class GameEngine {
     }
 
 
-    // `screenPoint` 위치에 픽셀 한칸을 찍는 연산을 캔버스에게 제출합니다.
-    static setPixel(screenPoint, color="black") {
-        this.$ctx.fillStyle = color;
-        this.$ctx.fillRect(screenPoint.x, screenPoint.y, 1, 1);
+    // `screenPoint` 위치에 픽셀 한칸을 찍는 연산을 후면버퍼에 기록합니다.
+    static setPixel(screenPoint, color=Color.black) {
+        // this.$ctx.fillStyle = color;
+        // this.$ctx.fillRect(screenPoint.x, screenPoint.y, 1, 1);
+
+        const index = (screenPoint.y * this.$cvs.width * 4) + (screenPoint.x * 4);
+        const data  = GameEngine.#backBuffer.data;
+
+        data[index]   = color.r * 255;
+        data[index+1] = color.g * 255;
+        data[index+2] = color.b * 255;
+        data[index+3] = color.a * 255;
     }
 
 
@@ -126,6 +138,10 @@ export class GameEngine {
             GameObject.update();
             GameObject.render();
 
+            // 후면 버퍼의 내용을 캔버스에 제출하고, 버퍼를 초기화한다.
+            GameEngine.$ctx.putImageData(GameEngine.#backBuffer, 0, 0);
+            GameEngine.#backBuffer.data.fill(0, 0);
+
             // textUI 를 그린다.
             GameEngine.$ctx.fillStyle = 'black';
 
@@ -134,6 +150,7 @@ export class GameEngine {
                 GameEngine.$ctx.fillText(op.text, op.x, op.y);
             }
             GameEngine.#textQueue = [];
+
 
             // 입력정보를 갱신합니다.
             for(let i=0; i<inputQueue.length; ++i) {
@@ -691,10 +708,11 @@ export class Camera {
 export class GameObject {
    static #instances = [];
 
-   transform; 
-   renderer;
-   animator = null;
-   update   = null; 
+   transform = null; 
+   renderer  = null;
+   update    = null; 
+
+   useFrustumCulling = true; // 절두체 컬링을 적용할지 여부
 
    // 게임 오브젝트를 하나 생성합니다.
    static instantiate(gameObject=null) {
@@ -743,38 +761,40 @@ export class GameObject {
        mainCamera.depthBuffer.fill(Infinity);
 
        for(const gameObject of GameObject.#instances) {
-           const camera      = gameObject.renderer.camera;
-           const view        = camera.view();
-           const model       = gameObject.transform.model();
-           const perspective = camera.perspective();
-           const finalMat    = model.mulMat(view, perspective);
 
-           const frustum  = new MyMath.Frustum(finalMat);
-           const mesh     = gameObject.renderer.mesh;
-           const collider = mesh.collider;
+            if(gameObject.renderer.mesh == null) { // 렌더링할 mesh 가 없다면, 스킵한다.
+                continue;
+            }
+            const camera      = gameObject.renderer.camera;
+            const view        = camera.view();
+            const model       = gameObject.transform.model();
+            const perspective = camera.perspective();
+            const finalMat    = model.mulMat(view, perspective);
 
-           // 절두체 컬링. view 행렬을 적용한 위치를 대상으로 진행
-           if(collider!=null && collider.checkBoundFrustum(frustum)==MyMath.Bound.Outside) {
-               continue;
-           }
-           gameObject.renderer.drawMesh(finalMat);
+            const frustum  = new MyMath.Frustum(finalMat);
+            const mesh     = gameObject.renderer.mesh;
+            const collider = mesh.collider;
 
-           // 매시의 콜라이더가 존재하고, 콜라이더 표시를 해야 하는 경우.
-           if(collider!=null && collider.visible) {
-               mesh.collider.drawCollider(finalMat, frustum);
-           }
+            // 절두체 컬링. view 행렬을 적용한 위치를 대상으로 진행
+            if(this.useFrustumCulling && collider!=null && collider.checkBoundFrustum(frustum)==MyMath.Bound.Outside) {
+                continue;
+            }
+            gameObject.renderer.drawMesh(finalMat);
 
+            // 매시의 콜라이더가 존재하고, 콜라이더 표시를 해야 하는 경우.
+            if(collider!=null && collider.visible) {
+                mesh.collider.drawCollider(finalMat, frustum);
+            }
 
-           // 메시에 본이 존재하고, 본을 표시를 해야 하는 경우.
-           if(mesh.type==MeshType.Skinned && mesh.boneVisible) {
+            // 메시에 본이 존재하고, 본을 표시를 해야 하는 경우.
+            if(mesh.type==MeshType.Skinned && mesh.boneVisible) {
 
-               for(const [key, value] of Object.entries(mesh.bones)) {
+                for(const [key, value] of Object.entries(mesh.bones)) {
                    value.drawBone(finalMat);
-               }
-           }
+                }
+            }
        }
    }
-
 
    // 생성된 게임 오브젝트들의 갯수
    static get instanceCount() { return GameObject.#instances.length; }
@@ -1159,7 +1179,7 @@ export class Bone {
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
 
-    boneColor = 'black'; // 본의 색깔을 지정
+    boneColor = Color.black; // 본의 색깔을 지정
 
     // 루트 본을 생성합니다. 
     constructor(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {

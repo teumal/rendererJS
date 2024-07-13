@@ -40,7 +40,7 @@ export class Color {
     static get clear() { return new Color(0,0,0,0); }
     static get grey() { return new Color(0.5, 0.5, 0.5, 1); }
     static get white() { return new Color(1,1,1,1); }
-
+    static get black() { return new Color(0,0,0,1); }
 
     // RGBA 색상을 생성합니다. 기본값은 white 입니다.
     constructor(r=1,g=1,b=1,a=1) {
@@ -105,7 +105,7 @@ export class Color {
 
 export class Material {
     mainTex       = null; // 메인 텍스쳐
-    triangleCount = 1;    // 영향을 미칠 삼각형의 갯수. 
+    triangleCount = 0;    // 영향을 미칠 삼각형의 갯수. 
 
     vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 정점 셰이더
     fragmentShader = (uv,pos)=>{ return Renderer.tex2D(this.mainTex, uv); };     // 픽셀 셰이더
@@ -119,9 +119,9 @@ export class Renderer {
     mainTexture = null;
     mesh        = null;
 
-    wireFrameColor  = 'black'; // 와이어 프레임의 선 색깔
-    wireFrameMode   = false;   // 와이어 프레임으로 메시를 그릴지 여부
-    backfaceCulling = true;    // 백페이스 컬링 적용 여부
+    wireFrameColor  = Color.black; // 와이어 프레임의 선 색깔
+    wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
+    backfaceCulling = true;        // 백페이스 컬링 적용 여부
 
     #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 디폴트 정점 셰이더
     #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };            // 디폴트 픽셀 셰이더
@@ -313,7 +313,7 @@ export class Renderer {
 
     // 격자에 `from` 에서 `to` 를 잇는 선을 그립니다.
     // `from`, `to` 는 항상 월드 좌표계 위의 점이어야 합니다.
-    drawLine2D(from, to, color="black") {
+    drawLine2D(from, to, color=Color.black) {
         from = this.camera.worldToScreen(from);
         to   = this.camera.worldToScreen(to);
 
@@ -368,7 +368,7 @@ export class Renderer {
 
     // 격자에 `center` 를 중심점으로 하고, `radius` 를 반지름으로 하는
     // 원을 그립니다. `center` 는 항상 월드 좌표계 위의 점이어야 합니다.
-    drawArc2D(center, radius, color="black") {
+    drawArc2D(center, radius, color=Color.black) {
         center = this.camera.worldToScreen(center);
         radius = radius * Camera.tileSize;
 
@@ -398,7 +398,7 @@ export class Renderer {
         const halfWidth  = screenSize.x;
         const halfHeight = screenSize.y;
         const TILE_SIZE  = 1;
-        const color      = "rgba(0,0,0, 0.2)";
+        const color      = new Color(0,0,0, 0.2);
 
         for(let x=TILE_SIZE; x<=halfWidth; x+=TILE_SIZE) {
             this.drawLine2D(
@@ -432,12 +432,12 @@ export class Renderer {
         this.drawLine2D(
             new Vector2(0, -halfHeight),
             new Vector2(0, halfHeight),
-            "red"
+            Color.red
         );
         this.drawLine2D(
             new Vector2(-halfWidth, 0),
             new Vector2(halfWidth, 0),
-            "green"
+            Color.green
         );
     }
 
@@ -698,7 +698,7 @@ export class Renderer {
                     const uvPos = uv0.mul(t0).add(uv1.mul(t1), uv2.mul(t2) ); // s*uv0 + t*uv1 + oneMinusST*uv2
                     let   rgba  = fragmentShader(uvPos, p.toVector3(viewZ) );
 
-                    GameEngine.setPixel(p, rgba.toString());
+                    GameEngine.setPixel(p, rgba);
                 }
             }
         }

@@ -18,8 +18,8 @@ class Transform {
 ```
 C++ 로 생각하면 `Transform* parent = null` 과 같은 개념으로 쓰려고 했는데... 자바 스크립트는 타입을 알 수가 없는지라.. <br>
 기본적으로 `this.#parent.#a` 처럼 접근할 수가 없었습니다. 이게 실행할 때는 문제 없이 실행되지만.. visual studio code 에서는 <br>
-저게 `private` 멤버라 접근할 수 없다고 한다는... 그래서 `const parent = this.#parent; parent.#a;` 처럼 해봤는데, <br>
-신기하게 이건 또 문법 에러가 아니라고 합니다;; 
+저게 `private` 멤버라 접근할 수 없다고 합니다. 그래서 `const parent = this.#parent; parent.#a;` 처럼 해봤는데, <br>
+신기하게 이건 또 문법 에러가 아니라고 합니다;
 
 이거 말고도 연산자 오버로딩(operator overloading)이 없던게 제일 불편했습니다. 그래서 `Vector3` 같은 클래스는 벡터 간의 덧셈을
 ``` js
@@ -30,7 +30,7 @@ const w = new Vector3(1,1,1);
 const result0 = u.add(v,w);       // u + v + w
 const result1 = u.add(v.sub(w) ); // u + (v-w)
 ```
-이렇게 해야 했던게 진짜 아니었던;; 이런거 보면 C++ 이 그리워지긴 하는데, 이런 특징들을 포기했을 때의 편의성이 너무 좋아서 ㅠㅠ <br>
+이렇게 해야 했던게 진짜 아니었던;; 이런거 보면 C++ 이 그리워지지만, 이런 특징들을 포기했을 때의 편의성이 너무 좋았기에<br>
 수학에 집중하기 위해 JS 를 선택하게 되었습니다. <br>
 
 `Math.js` 모듈에는 `Vector3`, `Matrix4x4`, `Frustum` 을 포함한 모든 수학 관련 클래스 및 함수들이 정의되어 있으며, <br>
@@ -40,6 +40,7 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 
 **EDIT 24/03/05**: 가중치 적용 추가
 
+**EDIT 24/07/13**: 후면 버퍼 추가. 퍼포먼스 향상
 
 <br>
 <br>
@@ -67,15 +68,17 @@ Camera.mainCamera.screenSize = GameEngine.getResolution();   // 메인 카메라
 const steve     = GameObject.instantiate(); // 새로운 게임오브젝트를 생성한다.
 const steveMesh = new Mesh();               // 매시 생성
 const steveTex  = new Texture("./resource/steve3d.png", GameEngine.initialize); // 텍스쳐 생성.
+const steveMat  = steve.renderer.material = new Material();                     // 머터리얼 생성.
 
-steve.renderer.mainTexture   = steveTex;  // 렌더러에 텍스쳐를 등록
-steve.renderer.mesh          = steveMesh; // 렌더러에 메시를 등록
+steveMat.mainTex    = steveTex;  // 머터리얼에 텍스쳐를 등록
+steve.renderer.mesh = steveMesh; // 렌더러에 메시를 등록
 
 steveMesh.vertices = [ /* 생략 */ ]; // 정점(vertex)들의 목록을 메시에 등록
 steveMesh.uvs      = [ /* 생략 */ ]; // UV 좌표들의 목록을 메시에 등록
 steveMesh.indices  = [ /* 생략 */ ]; // 인덱스 버퍼를 등록. 
 
-steveMesh.collider = new BoxCollider(steveMesh); // 바운딩 볼륨. 절두체 컬링에 사용됩니다.
+steveMat.triangleCount = steveMesh.indices.length / 6; // 머터리얼이 영향을 미칠 삼각형의 갯수를 알려준다.
+steveMesh.collider     = new BoxCollider(steveMesh);   // 바운딩 볼륨. 절두체 컬링에 사용됩니다.
 
 // 본(Bone)들을 생성
 const pelvis   = new Bone(new Vector3(0, -1, 0) );     // 골반
@@ -138,7 +141,6 @@ mainTex = new Texture("./main_texutre.png", ()=>{
 ```
 처럼 차례차례로 수행한 후, 마지막 텍스처 로드가 완료되었을 때, `GameEngine.initialize` 를 호출시키게 해야 합니다. <br>
 좋은 디자인은 아니지만(poor design), 해당 프로젝트에서는 이미지 파일 하나만 불러오면 되므로, 이 부분은 넘어가기로 했습니다. <br>
-이런 부분에서 또 C++ 이 그리워지는ㅠㅠ.
 
 `GameObject` 는 `update` 를 등록할 수 있으며, 등록한 콜백함수를 매 프레임마다 호출되도록 합니다. <br>
 여기 예제에서는 `GameEngine.getKeyDown` 등의 함수를 통해, 스티브의 트랜스폼을 갱신하고, <br>
@@ -155,6 +157,9 @@ steveMesh.indices = [
     1,2,3,  1,2,3, // 정면1, vertex0, vertex1, vertex2, uv0, uv1, uv2
 ];
 ```
+특이하게 삼각형을 하나를 그리기 위해서는 6개의 인덱스가 필요합니다. 그렇기에 모델링 파일을 렌더링하고 싶다면, <br>
+이 사실에 유의하여 렌더러와 호환되도록 js 파일을 작성해야 합니다.
+
 이때, 나열한 점들의 순서가 시계방향인지 반시계방향인지에 따라서 `backface culling` 를 적용할 수 있습니다. <br>
 물론, `Renderer.backfaceCulling` 속성을 설정하여 할지 안할지 여부 또한 결정 가능합니다. <br>
 최종 결과는 아래와 같습니다. `Mesh.boneVisible = true` 를 통해 본이 어떻게 되었는지 또한 보이도록 했습니다: <br>

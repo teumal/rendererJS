@@ -244,3 +244,9 @@ sif.update = ()=>{
 };
 ```
 <img src="https://postfiles.pstatic.net/MjAyNDAzMDRfMjg0/MDAxNzA5NTI5NDI3OTg5.5-MrNU9KLpyfnu_kA5qHfaNw6VEy59MLXBdeVSctSG8g.YX2qfCm4g5He4oL179huryTFgiGz4p7iLw_w2ufDEWUg.JPEG/%EC%BA%A1%EC%B2%98.JPG?type=w773">
+
+## Example3
+
+마지막 예제는 원신의 리사(丽莎)를 렌더링합니다. 
+
+<img src="https://www.notion.so/image/https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Ffe6e2013-3ec2-466b-a297-5e801e33afd0%2F12466090-acfe-4609-9f8d-42bb818a9876%2F%25EC%25BA%25A1%25EC%25B2%2598.jpg?table=block&id=182bd357-2e0a-41e6-8e14-d097f512d8e9&spaceId=fe6e2013-3ec2-466b-a297-5e801e33afd0&width=960&userId=e5dbbac3-bab2-4665-9e2b-68f3a45f7778&cache=v2">

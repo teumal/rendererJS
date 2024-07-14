@@ -264,7 +264,7 @@ int main() {
 
    std::ofstream out0(file_name1);
    std::ofstream out1(file_name2);
-   pmx::cout = &out1;
+   pmx::out = &out1;
 
    pmx::read(file_name0);
    pmx::printjs("lisa", out0);

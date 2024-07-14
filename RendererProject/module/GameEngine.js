@@ -27,6 +27,7 @@ export const KeyCode = {
     Alpha9  : "9",
     Alpha10 : "10",
 };
+export const BoneType = { Static: 0, Dynamic: 1 };
 
 const KeyState = {
     KeyDown  : 1,
@@ -35,7 +36,6 @@ const KeyState = {
     Dirty    : 8,
     None     : 16,
 };
-
 
 
 export class GameEngine {
@@ -1173,8 +1173,9 @@ export class BoxCollider {
 export class Bone {
     static renderer = null;
 
-    bindPose;  // 본의 최초 트랜스폼.
-    transform; // 본의 트랜스폼.
+    bindPose   = null;            // 본의 최초 트랜스폼.
+    $transform = null;            // 본의 트랜스폼.
+    boneType   = BoneType.Static; // 본이 정적(Static) 또는 동적(Dynamic) 인지 알려줍니다.
 
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
@@ -1188,7 +1189,7 @@ export class Bone {
             position : position,
             rotation : rotation
         };
-        this.transform = new Transform(position, scale, rotation);
+        this.$transform = new Transform(position, scale, rotation);
 
 
         // 본을 표시하기 위한, 메시를 생성합니다. 최초 한번만 생성합니다.
@@ -1268,7 +1269,6 @@ export class Bone {
         }
     }
 
-
     // 본의 스켈레탈 애니메이션을 적용하는 행렬을 돌려줍니다. 스켈레탈 애니메이션을 적용하기 위해,
     // bindPose^(-1) 을 적용하여 로컬 공간으로 이동시킵니다. 이후, parent.worldTransform * this.localTransform
     // 을 적용하는 순서를 가집니다. 
@@ -1276,7 +1276,7 @@ export class Bone {
         const pose = this.bindPose;
 
         const invBindPose = Transform.invTRS(pose.position, pose.scale, pose.rotation);
-        const local       = this.transform.model();
+        const local       = this.$transform.model();
         return invBindPose.mulMat(local);
     }
 
@@ -1327,7 +1327,7 @@ export class Bone {
 
         if(index < 0) {
             this.#childs.push(bone);
-            this.transform.addChild(bone.transform);
+            this.$transform.addChild(bone.$transform);
         }
     }
 
@@ -1338,7 +1338,22 @@ export class Bone {
 
         if(index > -1) {
             this.#childs.splice(index,1);
-            this.transform.removeChild(bone.transform);
+            this.$transform.removeChild(bone.$transform);
+        }
+    }
+
+
+    // 본의 트랜스폼이 수정되었음을 모든 자식들에게 알립니다.
+    // 모든 자식 본들은 Dynamic 타입의 본이 됩니다.
+    #setDirty() {
+        
+        if(this.boneType == BoneType.Static) {
+            this.boneType = BoneType.Dynamic;
+
+            for(let i=0; i<this.#childs.length; ++i) {
+                const child = this.#childs[i];
+                child.#setDirty();
+            }
         }
     }
 
@@ -1346,7 +1361,33 @@ export class Bone {
     // 본의 부모를 지정합니다. 
     get parent() { return this.#parent; }
     set parent(bone=null) {
-        this.#parent          = bone;
-        this.transform.parent = bone.transform;
+        
+        if(bone == null) {
+            bone.removeChild(this);
+        }
+        else {
+            bone.addChild(this);
+        }
+    }
+
+    // 본의 회전량을 수정하거나 얻습니다.
+    get localRotation() { return this.$transform.localRotation; }
+    set localRotation(newRotation) {
+        this.#setDirty();
+        this.$transform.localRotation = newRotation;
+    }
+
+    // 본의 크기를 수정하거나 얻습니다.
+    get localScale() { return this.$transform.localScale; }
+    set localScale(newScale) {
+        this.#setDirty();
+        this.$transform.localScale = newScale;
+    }
+
+    // 본의 위치를 수정하거나 얻습니다.
+    get position() { return this.$transform.position; }
+    set position(newPosition) {
+        this.#setDirty();
+        this.$transform.position = newPosition;
     }
 };

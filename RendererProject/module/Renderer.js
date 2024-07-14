@@ -1,6 +1,6 @@
 import {Vector2, Vector3, Vector4, Matrix4x4} from "./MyMath.js";
 import * as MyMath from "./MyMath.js";
-import {GameEngine, Transform, Camera, BoneType} from "./GameEngine.js";
+import {GameEngine, Transform, Camera} from "./GameEngine.js";
 
 export const MeshType = {
     Normal  : 0,
@@ -122,9 +122,6 @@ export class Renderer {
     wireFrameColor  = Color.black; // 와이어 프레임의 선 색깔
     wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
     backfaceCulling = true;        // 백페이스 컬링 적용 여부
-
-    #skeletalCache = null; // 스켈레탈 애니메이션에서 사용되는 행렬들의 캐시. dictionary.
-    test = false;
 
     #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 디폴트 정점 셰이더
     #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };            // 디폴트 픽셀 셰이더
@@ -448,35 +445,19 @@ export class Renderer {
     // 본의 가중치를 적용합니다.
     applySkeletal(original) {
 
-        if(this.#skeletalCache == null) { // 계산량을 줄이기 위해, skeletal() 결과들을 캐싱한다.
-            this.#skeletalCache = [];     // 해시 맵을 초기화한다.
-        }
-
         for(const p of [original.p0, original.p1, original.p2]) { // 세 정점들에 대해서 진행한다. 
             if(p.weight == null) continue;                        // 가중치가 존재하지 않으면, 스킵
 
             const boneNames = p.weight.bones;     // 이름들의 목록
             const weights   = p.weight.weights;   // 가중치들의 목록
             const boneCount = p.weight.boneCount; // 본들의 갯수
-            const hashCode  = p.weight.hashCode;  // 캐싱된 skeletal 행렬의 key
-
-            // Bone 의 트랜스폼이 변동되었거나, 캐싱된 행렬이 없는 경우
-            if(this.#skeletalCache[hashCode] == undefined) {
-                const lst = this.#skeletalCache[hashCode] = [];
-
-                for(let i=0; i<boneCount; ++i) {
-                    const bone  = this.mesh.bones[boneNames[i] ];
-                    const model = bone.skeletal();
-                    lst.push(model);
-                }
-            }
 
             let result = Vector3.zero; // 혼합된 결과
 
             for(let i=0; i<boneCount; ++i) {
                 const bone   = this.mesh.bones[boneNames[i] ];
                 const weight = weights[i];
-                let   model  = (bone.boneType == BoneType.Static) ? this.#skeletalCache[hashCode][i] : bone.skeletal();
+                let   model  = bone.skeletal();
 
                 result = result.add(model.mulVector(p.position).mul(weight) ); // 각 본의 최종행렬을 적용후, 가중치를 곱한다.
             }
@@ -822,8 +803,6 @@ export class Weight {
     bones     = null; // 연결된 본들의 목록
     weights   = null; // 본들에게 받는 영향력
 
-    #hashCode = null; // 해시 코드
-
     // `bones` 는 정점에게 영향을 미치는 본들의 목록
     // `weight` 는 각 본들이 주는 가중치 값들의 목록
     constructor(bones, weights) {
@@ -831,26 +810,9 @@ export class Weight {
         this.weights = weights;
     }
 
-    // Weight 의 hash key 를 나타내는 string 을 돌려줍니다.
-    get hashCode() {
-        
-        if(this.#hashCode == null) {
-            this.#hashCode = "";
-
-            for(let i=0; i<this.bones.length; ++i) {
-                this.#hashCode += this.bones[i];
-            }
-            for(let i=0; i<this.weights.length; ++i) {
-                this.#hashCode += this.weights[i].toString();
-            }
-        }
-        return this.#hashCode;
-    }
-
     // 본의 갯수를 얻습니다.
     get boneCount() { return this.bones.length; }
 };
-
 
 
 export class Mesh {

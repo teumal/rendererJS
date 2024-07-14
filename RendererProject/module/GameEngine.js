@@ -1356,8 +1356,7 @@ export class Bone {
     // 본의 트랜스폼이 수정되었음을 모든 자식들에게 알립니다.
     // 모든 자식 본들 또한 isDirty = true; 가 됩니다.
     #setDirty() {
-        
-        if(this.boneType == BoneType.Static) {
+        if(this.$isDirty == false) {
             this.$isDirty = true;
 
             for(let i=0; i<this.#childs.length; ++i) {

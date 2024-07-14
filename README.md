@@ -166,7 +166,7 @@ steveMesh.indices = [
 물론, `Renderer.backfaceCulling` 속성을 설정하여 할지 안할지 여부 또한 결정 가능합니다. <br>
 최종 결과는 아래와 같습니다. `Mesh.boneVisible = true` 를 통해 본이 어떻게 되었는지 또한 보이도록 했습니다: <br>
 <img src="https://github.com/teumal/rendererJS/blob/main/%EC%98%88%EC%A0%9C%20%EA%B2%B0%EA%B3%BC.JPG?raw=true">
-
+<img src="https://postfiles.pstatic.net/MjAyNDA3MTVfNTMg/MDAxNzIwOTc3OTY3NzQy.cAPaXfobqYAo7eiBAL43YdXTThCHb72bb3lSoUSrZakg.HrVovdtO0dXEy3DLaVQXqY5zNWSiAiY5sBxHE3rhRGsg.JPEG/%EC%BA%A1%EC%B2%98.JPG?type=w773">
 ## Example2
 
 이번 예제는 PMX (MikuMikuDance) 파일을 읽어들여, 다크소울의 보스인 **Sif, the GreatWolf** 를 렌더링합니다 <br>

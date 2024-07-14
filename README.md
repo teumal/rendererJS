@@ -247,6 +247,181 @@ sif.update = ()=>{
 
 ## Example3
 
-마지막 예제는 원신의 리사(丽莎)를 렌더링합니다. 
+마지막 예제는 원신의 리사(丽莎)를 렌더링합니다. 여기서는 C++ 로 PMX 파일을 읽고, rendererJS 와 호환되는 js 파일을 써주는 <br>
+`pmx.h` 헤더파일을 간단히 소개합니다. 먼저 `pmx.h` 를 다운받으시고, 아래 코드를 작성해주시길 바랍니다:
+
+``` c++
+// main.cpp
+// compiled in MSVC
+# include<iostream>
+# include<fstream>
+# include"pmx.h"
+
+int main() {
+   const char* file_name0 = "./lisa.pmx";
+   const char* file_name1 = "./result.js";
+   const char* file_name2 = "./result.log";
+
+   std::ofstream out0(file_name1);
+   std::ofstream out1(file_name2);
+   pmx::cout = &out1;
+
+   pmx::read(file_name0);
+   pmx::printjs("lisa", out0);
+}
+```
+사용법은 아주 간단합니다. 먼저 `pmx::read()` 함수를 사용하여, PMX 파일을 읽어들입니다. <br>
+`pmx::read()` 은 모델링 파일의 정보를 `(*pmx::out)` 으로 출력합니다. <br>
+기본값은 `&std::cout` 이며, 위 예제에서는 `result.log` 로 출력하기 위해 `&out1` 으로 초기화해주었습니다. <br><br>
+
+다음 `pmx::printjs()` 함수를 호출하여, js 파일을 작성합니다. 첫번째 인자는 짓고 싶은 `gameObject` 의 이름이며, <br>
+만들어진 파일은 아래와 같은 형식을 가집니다:
+
+``` js
+// result.js
+import {GameEngine, Transform, Camera, GameObject, CircleCollider, BoxCollider, KeyCode, Bone} from "./GameEngine.js";
+import {Vector2, Vector3, Vector4} from "./MyMath.js";
+import * as MyMath from "./MyMath.js";
+import {Renderer, Texture, Mesh, Weight, Color, Material} from "./Renderer.js";
+
+GameEngine.canvas = document.getElementById("canvas");
+GameEngine.setResolution(480, 270);
+Camera.mainCamera.screenSize = GameEngine.getResolution();
+
+const lisa     = GameObject.instantiate();
+const lisaMesh = lisa.renderer.mesh = new Mesh();
+
+lisaMesh.vertices = [ /* 생략 */ ];
+lisaMesh.indices = [ /* 생략 */ ];
+lisaMesh.uvs = [ /* 생략 */ ];
+
+const lisaMat0 = new Material();
+const lisaMat1 = new Material();
+const lisaMat2 = new Material();
+const lisaMat3 = new Material();
+const lisaMat4 = new Material();
+const lisaMat5 = new Material();
+const lisaMat6 = new Material();
+const lisaMat7 = new Material();
+const lisaMat8 = new Material();
+const lisaMat9 = new Material();
+const lisaMat10 = new Material();
+const lisaMat11 = new Material();
+const lisaMat12 = new Material();
+const lisaMat13 = new Material();
+
+lisaMat0.triangleCount = 196;
+lisaMat1.triangleCount = 1234;
+lisaMat2.triangleCount = 1034;
+lisaMat3.triangleCount = 1816;
+lisaMat4.triangleCount = 2861;
+lisaMat5.triangleCount = 610;
+lisaMat6.triangleCount = 1938;
+lisaMat7.triangleCount = 844;
+lisaMat8.triangleCount = 1002;
+lisaMat9.triangleCount = 3806;
+lisaMat10.triangleCount = 1524;
+lisaMat11.triangleCount = 840;
+lisaMat12.triangleCount = 8776;
+lisaMat13.triangleCount = 442;
+
+lisa.renderer.materials = [lisaMat0, lisaMat1, lisaMat2, lisaMat3, lisaMat4, lisaMat5, lisaMat6, lisaMat7, lisaMat8, lisaMat9, lisaMat10, lisaMat11, lisaMat12, lisaMat13];
+
+let lisaTex0 = null;
+let lisaTex1 = null;
+let lisaTex2 = null;
+let lisaTex3 = null;
+
+lisaMesh.bones = { /* 생략 */ };
+
+//#region Bone Hierarchy
+
+  lisaMesh.bones["unnamed27"].parent = lisaMesh.bones["unnamed26"]
+	lisaMesh.bones["groove"].parent = lisaMesh.bones["unnamed27"]
+	lisaMesh.bones["waist"].parent = lisaMesh.bones["groove"]
+  /* 생략 */
+
+//#endregion
+
+lisaMesh.weights = [ /* 생략 */ ];
+
+lisaMesh.collider           = new BoxCollider(lisaMesh);
+lisaMesh.boneVisible        = false;
+lisa.renderer.wireFrameMode = false;
+
+let rotation = Vector3.zero;
+let position = lisa.transform.position = new Vector3(0,0,8);
+
+// update function example
+lisa.update = ()=>{
+	const deltaTime     = GameEngine.deltaTime;
+	const rotSpeed      = deltaTime * 360;
+	const moveSpeed     = deltaTime * 40;
+	let   rotationDirty = false;
+	let   positionDirty = false;
+
+	if(GameEngine.getKeyUp(KeyCode.Alpha1)) lisa.renderer.wireFrameMode = !lisa.renderer.wireFrameMode;
+	if(GameEngine.getKeyUp(KeyCode.Alpha2)) lisaMesh.boneVisible        = !lisaMesh.boneVisible;
+
+	if (GameEngine.getKey(KeyCode.Left))  { rotation.y += rotSpeed; rotationDirty = true; }
+	if (GameEngine.getKey(KeyCode.Right)) { rotation.y -= rotSpeed; rotationDirty = true; }
+	if (GameEngine.getKey(KeyCode.Up))    { rotation.x += rotSpeed; rotationDirty = true; }
+	if (GameEngine.getKey(KeyCode.Down))  { rotation.x -= rotSpeed; rotationDirty = true; }
+
+	if (GameEngine.getKey(KeyCode.W)) { position.z += moveSpeed; positionDirty = true; }
+	if (GameEngine.getKey(KeyCode.S)) { position.z -= moveSpeed; positionDirty = true; }
+	if (GameEngine.getKey(KeyCode.A)) { position.y -= moveSpeed; positionDirty = true; }
+	if (GameEngine.getKey(KeyCode.D)) { position.y += moveSpeed; positionDirty = true; }
+
+	if(positionDirty) {
+		lisa.transform.position = position;
+	}
+	if(rotationDirty) {
+		lisa.transform.localRotation = rotation;
+	}
+	GameEngine.drawText(`deltaTime: ${deltaTime}`, 20, 20);
+	GameEngine.drawText(`position : ${position}`, 20, 30);
+	GameEngine.drawText(`rotation : ${rotation}`, 20, 40);
+	GameEngine.drawText(`boneVisible : ${lisaMesh.boneVisible}`, 20, 50); 
+	GameEngine.drawText(`wireFrameMode : ${lisa.renderer.wireFrameMode}`, 20, 60);
+};
+
+lisaTex0 = new Texture("./resource/Texture\头发.png", ()=>{
+	lisaTex1 = new Texture("./resource/Texture\脸.png", ()=>{
+		lisaTex2 = new Texture("./resource/Texture\衣服.png", ()=>{
+			lisaTex3 = new Texture("./resource/Texture\表情.png", ()=>{
+				lisaMat0.mainTex = lisaTex0;
+				lisaMat1.mainTex = lisaTex1;
+				lisaMat2.mainTex = lisaTex2;
+				lisaMat3.mainTex = lisaTex1;
+				lisaMat4.mainTex = lisaTex0;
+				lisaMat5.mainTex = lisaTex0;
+				lisaMat6.mainTex = lisaTex0;
+				lisaMat7.mainTex = lisaTex2;
+				lisaMat8.mainTex = lisaTex2;
+				lisaMat9.mainTex = lisaTex2;
+				lisaMat10.mainTex = lisaTex2;
+				lisaMat11.mainTex = lisaTex2;
+				lisaMat12.mainTex = lisaTex2;
+				lisaMat13.mainTex = lisaTex3;
+				GameEngine.initialize();
+			});
+		});
+	});
+});
+
+```
+해당 파일은 `pmx::printjs()` 인자에 `"lisa"` 를 주었기에, 모두 `lisaMat`, `lisaTex` 와 같은 이름을 가지고 있습니다 <br>
+또한 `lisa.update` 에 간단한 예제가 포함되어 있습니다. 사용법은 아래와 같습니다:
+
+- W,S : z 축 이동
+- A,D : y 축 이동
+- ←,→ : yaw 회전 (=y axis)
+- ↑,↓ : pitch 회전 (=x axis)
+- 1 : toggle `wireFrameMode`
+- 2 : toggle `boneVisible`
+
+위 코드를 보면 `Texture` 생성자에 줄 파일의 경로가 잘못됨을 알 수 있는데, 이런 부분들은 직접 수정하셔야 합니다. <br>
+최종 결과는 다음과 같습니다:
 
 <img src="https://www.notion.so/image/https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Ffe6e2013-3ec2-466b-a297-5e801e33afd0%2F12466090-acfe-4609-9f8d-42bb818a9876%2F%25EC%25BA%25A1%25EC%25B2%2598.jpg?table=block&id=182bd357-2e0a-41e6-8e14-d097f512d8e9&spaceId=fe6e2013-3ec2-466b-a297-5e801e33afd0&width=960&userId=e5dbbac3-bab2-4665-9e2b-68f3a45f7778&cache=v2">

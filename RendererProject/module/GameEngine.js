@@ -1328,6 +1328,7 @@ export class Bone {
         if(index < 0) {
             this.#childs.push(bone);
             this.$transform.addChild(bone.$transform);
+            bone.#parent = this;
         }
     }
 
@@ -1339,6 +1340,7 @@ export class Bone {
         if(index > -1) {
             this.#childs.splice(index,1);
             this.$transform.removeChild(bone.$transform);
+            bone.#parent = null;
         }
     }
 

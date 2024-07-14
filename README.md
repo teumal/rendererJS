@@ -42,7 +42,7 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 
 **EDIT 24/07/13**: 후면 버퍼 추가. 퍼포먼스 향상
 
-**EDIT 24/7/14**: BoneType (Static, Dynamic) 추가. Renderer 가 이제 Static Bone 에 대해 caching 을 사용함.
+**EDIT 24/7/15**: Bone.skeletal() 함수는 transform 에 변동이 없으면, 결과를 캐싱하여 사용하도록 함. 또한 depthBuffer 가 매프레임마다 재할당되는 것을 막음.
 
 <br>
 <br>
@@ -217,11 +217,11 @@ const tail     = sifMesh.bones["tail 1"];
 const rightLeg = sifMesh.bones["Bip01-R-Calf01"];
 const leftLeg  = sifMesh.bones["Bip01-L-Calf01"];
 
-const tailRotation     = Transform.toEuler(tail.transform.localRotation);
-const rightArmRotation = Transform.toEuler(rightArm.transform.localRotation);
-const leftArmRotation  = Transform.toEuler(leftArm.transform.localRotation);
-const rightLegRotation = Transform.toEuler(rightLeg.transform.localRotation);
-const leftLegRotation  = Transform.toEuler(leftLeg.transform.localRotation);
+const tailRotation     = Transform.toEuler(tail.localRotation);
+const rightArmRotation = Transform.toEuler(rightArm.localRotation);
+const leftArmRotation  = Transform.toEuler(leftArm.localRotation);
+const rightLegRotation = Transform.toEuler(rightLeg.localRotation);
+const leftLegRotation  = Transform.toEuler(leftLeg.localRotation);
 let   rad              = 0;
 
 sif.update = ()=>{

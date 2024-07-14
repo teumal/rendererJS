@@ -42,6 +42,8 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 
 **EDIT 24/07/13**: 후면 버퍼 추가. 퍼포먼스 향상
 
+**EDIT 24/7/14**: BoneType (Static, Dynamic) 추가. Renderer 가 이제 Static Bone 에 대해 caching 을 사용함.
+
 <br>
 <br>
 

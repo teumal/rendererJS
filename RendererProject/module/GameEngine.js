@@ -27,7 +27,6 @@ export const KeyCode = {
     Alpha9  : "9",
     Alpha10 : "10",
 };
-export const BoneType = { Static: 0, Dynamic: 1 };
 
 const KeyState = {
     KeyDown  : 1,
@@ -757,7 +756,10 @@ export class GameObject {
    static render() {
        const mainCamera = Camera.mainCamera;
        const screenSize = mainCamera.screenSize.x * mainCamera.screenSize.y;
-       mainCamera.depthBuffer = new Array(screenSize);
+       
+       if(mainCamera.depthBuffer == null) {
+           mainCamera.depthBuffer = new Array(screenSize);
+       }
        mainCamera.depthBuffer.fill(Infinity);
 
        for(const gameObject of GameObject.#instances) {
@@ -1173,9 +1175,10 @@ export class BoxCollider {
 export class Bone {
     static renderer = null;
 
-    bindPose   = null;            // 본의 최초 트랜스폼.
-    $transform = null;            // 본의 트랜스폼.
-    boneType   = BoneType.Static; // 본이 정적(Static) 또는 동적(Dynamic) 인지 알려줍니다.
+    bindPose       = null;  // 본의 최초 트랜스폼.
+    $transform     = null;  // 본의 트랜스폼.
+    $isDirty       = true;
+    #skeletalCache = null;
 
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
@@ -1190,7 +1193,6 @@ export class Bone {
             rotation : rotation
         };
         this.$transform = new Transform(position, scale, rotation);
-
 
         // 본을 표시하기 위한, 메시를 생성합니다. 최초 한번만 생성합니다.
         if(Bone.renderer==null) {
@@ -1271,13 +1273,19 @@ export class Bone {
 
     // 본의 스켈레탈 애니메이션을 적용하는 행렬을 돌려줍니다. 스켈레탈 애니메이션을 적용하기 위해,
     // bindPose^(-1) 을 적용하여 로컬 공간으로 이동시킵니다. 이후, parent.worldTransform * this.localTransform
-    // 을 적용하는 순서를 가집니다. 
+    // 을 적용하는 순서를 가집니다. skeletal() 함수는 한번 생성한 결과를 캐싱하며, 트랜스폼이 변경되었을 경우
+    // 재생성합니다.
     skeletal() {
-        const pose = this.bindPose;
+        
+        if(this.#skeletalCache == null || this.$isDirty) {
+            this.$isDirty = false;
+            const pose = this.bindPose;
 
-        const invBindPose = Transform.invTRS(pose.position, pose.scale, pose.rotation);
-        const local       = this.$transform.model();
-        return invBindPose.mulMat(local);
+            const invBindPose = Transform.invTRS(pose.position, pose.scale, pose.rotation);
+            const local       = this.$transform.model();
+            return this.#skeletalCache = invBindPose.mulMat(local);
+        }
+        return this.#skeletalCache;
     }
 
 
@@ -1346,11 +1354,11 @@ export class Bone {
 
 
     // 본의 트랜스폼이 수정되었음을 모든 자식들에게 알립니다.
-    // 모든 자식 본들은 Dynamic 타입의 본이 됩니다.
+    // 모든 자식 본들 또한 isDirty = true; 가 됩니다.
     #setDirty() {
         
         if(this.boneType == BoneType.Static) {
-            this.boneType = BoneType.Dynamic;
+            this.$isDirty = true;
 
             for(let i=0; i<this.#childs.length; ++i) {
                 const child = this.#childs[i];

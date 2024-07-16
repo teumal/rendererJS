@@ -44,6 +44,8 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 
 **EDIT 24/7/15**: Bone.skeletal() 함수는 transform 에 변동이 없으면, 결과를 캐싱하여 사용하도록 함. 또한 depthBuffer 가 매프레임마다 재할당되는 것을 막음.
 
+**EDIT 24/7/17**: Renderer.drawMesh 함수 최적화. 퍼포먼스 향상. 프레임이 많이 안정화됨
+
 <br>
 <br>
 

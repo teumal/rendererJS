@@ -115,9 +115,10 @@ export class Material {
 export class Renderer {
     static mode = false;
 
-    camera      = Camera.mainCamera; 
-    mainTexture = null;
-    mesh        = null;
+    triangleList = new Array(100);
+    camera       = Camera.mainCamera; 
+    mainTexture  = null;
+    mesh         = null;
 
     wireFrameColor  = Color.black; // 와이어 프레임의 선 색깔
     wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
@@ -466,84 +467,67 @@ export class Renderer {
     }
 
 
-
     // `mesh` 를 그립니다. 정점변환을 수행하기 위해,
     // 모델링 행렬 `M` 과 뷰 행렬 `V`, 원근투영 행렬 `P` 를 곱한 최종 행렬인
     // `finalMat` 를 또한 인자로 받습니다.
     drawMesh(finalMat) {
-        const triangleCount        = this.mesh.triangleCount;
-        const triangleList         = [];
-        const backfaceCullingSaved = this.backfaceCulling;
+        const triangleCount = this.mesh.triangleCount;
 
-        let materialIndex  = 0; // 사용할 머터리얼의 인덱스
-        let materialAffect = 0; // 현재 머터리얼이 영향을 준 삼각형의 갯수
-
-        // 메시를 이루는 삼각형들을 절두체에 꼭 맞도록,
-        // 자른 후, `triangleList` 에 저장한다.
+        let materialIndex  = 0; // 현재 사용할 머터리얼의 번호
+        let materialAffect = 0; // 현재 머터리얼로 그려야할 삼각형의 갯수
+        
         for(let i=0; i<triangleCount; ++i) {
-            const original = this.mesh.getTriangle(i); // 한번도 쪼개지 않은 원본 삼각형.
-            const begin    = triangleList.length;
-
-
-            // 스켈레탈 애니메이션. 정점에 본이 박혀있다면, 본의 가중치를 적용한다. 
-            if(this.mesh.type==MeshType.Skinned) {
-                this.applySkeletal(original);
+            const original = this.mesh.getTriangle(i);
+            let   listSize = 1;
+            
+            if(this.mesh.type==MeshType.Skinned) { // 스켈레탈 애니메이션. 본을 가지고 있다면,
+                this.applySkeletal(original);      // 본의 가중치를 적용한다.
             }
 
-
-            // 정점 변환.  월드 좌표를 클립 좌표로 변환한다.
-            original.p0.position   = this.#vertexShader(original.p0.position, finalMat);
-            original.p1.position   = this.#vertexShader(original.p1.position, finalMat);
-            original.p2.position   = this.#vertexShader(original.p2.position, finalMat);
-            original.materialIndex = materialIndex;
-            triangleList.push(original);
-
+            // 정점 변환. 월드 좌표를 클립 좌표로 변환한다.
+            original.p0.position = this.#vertexShader(original.p0.position, finalMat);
+            original.p1.position = this.#vertexShader(original.p1.position, finalMat);
+            original.p2.position = this.#vertexShader(original.p2.position, finalMat);
+            this.triangleList[0] = original;
 
             // `original` 삼각형이 절두체에 꼭 맞을 때까지 쪼갠다.
-            // 총 7개의 평면에 대해서 수행한다.
+            // 총 7개의 평면에 대해서 수행한다: origin, near, far, top, bottom, left, right
             for(let i=0; i<7; ++i) {
-                let end = triangleList.length;
 
-                for(let j=begin; j<end; ++j) {
-                    const triangle = triangleList[j];
+                for(let j=0; j<listSize; ++j) {
+                    const triangle = this.triangleList[j];
                     let   p0       = triangle.p0;
                     let   p1       = triangle.p1;
                     let   p2       = triangle.p2;
 
-                    const result0  = Renderer.#testFunc[i](p0.position);
-                    const result1  = Renderer.#testFunc[i](p1.position);
-                    const result2  = Renderer.#testFunc[i](p2.position);
-                    const count    = result0 + result1 + result2;
+                    const result0 = Renderer.#testFunc[i](p0.position);
+                    const result1 = Renderer.#testFunc[i](p1.position);
+                    const result2 = Renderer.#testFunc[i](p2.position);
+                    const count   = result0 + result1 + result2;
 
-                    // 세점 다 평면의 바깥에 위치한다면, 그리기에서 제외한다.
+                    // 세 점이 모두 평면의 바깥에 위치한다면, 그리기에서 제외한다.
                     if(count==3) {
-                        triangleList.splice(j--, 1);
-                        end--;
+                        this.triangleList[j--]      = this.triangleList[--listSize];
+                        this.triangleList[listSize] = null;
                     }
 
-
-                    // 두점만 평면의 바깥에 위치한 경우, 삼각형의 일부를 잘라준다.
+                    // 두 점만 평면의 바깥에 위치한 경우, 삼각형의 일부를 잘라준다.
                     else if(count==2) {
 
                         if(result0==1) {
                             if     (result1==1) { p0=triangle.p2; p1=triangle.p0; p2=triangle.p1; }
                             else if(result2==1) { p0=triangle.p1; p1=triangle.p2; p2=triangle.p0; }
                         }
-
-                        const p01Clip = Renderer.#clipFunc[i](p0, p1);
-                        const p02Clip = Renderer.#clipFunc[i](p0, p2);
+                        const p01Clip = Renderer.#clipFunc[i](p0,p1);
+                        const p02Clip = Renderer.#clipFunc[i](p0,p2);
 
                         triangle.p0 = p0;
                         triangle.p1 = p01Clip;
                         triangle.p2 = p02Clip;
-
-                        this.backfaceCulling = false;
                     }
 
-
-                    // 한점만 평면의 바깥에 위치한 경우, 삼각형의 일부를 잘라준다.
+                    // 한 점만 평면의 바깥에 위치한 경우, 삼각형의 일부를 잘라준다.
                     else if(count==1) {
-
                         if     (result0==1) { p0=triangle.p1; p1=triangle.p2; p2=triangle.p0; }
                         else if(result1==1) { p0=triangle.p2; p1=triangle.p0; p2=triangle.p1; }
 
@@ -551,23 +535,33 @@ export class Renderer {
                         const p02Clip = Renderer.#clipFunc[i](p0, p2);
 
                         // 새로운 삼각형을 만들어 `list` 에 넣어준다.
-                        triangleList.push({
+                        this.triangleList[listSize++] = {
                             p0            : { position : p0.position.clone(),      uv : p0.uv.clone()      },
                             p1            : { position : p1.position.clone(),      uv : p1.uv.clone()      },
                             p2            : { position : p12Clip.position.clone(), uv : p12Clip.uv.clone() },
                             materialIndex : triangle.materialIndex
-                        });
+                        };
 
                         // 기존의 삼각형은 쪼개진 버전으로 갱신해준다.
                         triangle.p0 = p0;
                         triangle.p1 = p12Clip;
                         triangle.p2 = p02Clip;
-
-                        this.backfaceCulling = false;
                     }
                 }
             }
 
+            // 쪼개진 삼각형들을 모두 그려준다.
+            for(let i=0; i<listSize; ++i) {
+                const t = this.triangleList[i];
+
+                if(this.materials != null) {
+                    this.drawTriangle(t, this.materials[materialIndex].fragmentShader);
+                }
+                else {
+                    this.drawTriangle(t, this.#fragmentShader);
+                }
+                this.triangleList[i] = null; // for optimizing GC
+            }
 
             // 서브 메시를 사용하고, 현재 머터리얼이 정해진 수의 삼각형에게 영향을 주었다면,
             // 이후의 삼각형들은 다음 머터리얼을 적용한다.
@@ -576,21 +570,6 @@ export class Renderer {
                 materialIndex++;
             }
         }
-
-        // 쪼개진 삼각형들을 모두 그려준다.
-        for(let i=0; i<triangleList.length; ++i) {
-            const t = triangleList[i];
-            
-            if(this.materials != null) {
-
-                this.drawTriangle(t, this.materials[t.materialIndex].fragmentShader);
-                continue;
-            }
-            this.drawTriangle(t, this.#fragmentShader);
-        }
-
-        // 백페이스 컬링 설정을 복구한다.
-        this.backfaceCulling = backfaceCullingSaved;
     }
 
 

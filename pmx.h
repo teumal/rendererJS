@@ -765,7 +765,7 @@ void pmx::printjs(const char* gameobject_name, std::ofstream& js) {
 		if (parent_index < 0) { // -1 indicates root bone
 			continue;
 		}
-		js << "\t" << mesh << ".bones[\"" << b.global_name << "\"].parent = lisaMesh.bones[\"";
+		js << "\t" << mesh << ".bones[\"" << b.global_name << "\"].parent = " << mesh << ".bones[\"";
 		js << parent.global_name << "\"]\n";
 	}
 

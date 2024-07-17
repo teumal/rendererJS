@@ -787,8 +787,8 @@ void pmx::printjs(const char* gameobject_name, std::ofstream& js) {
 
 		const vertex_t* triangle[] = {
 			&vertices.data[faces.data[i].vertex_index],
-			&vertices.data[faces.data[i].vertex_index],
-			&vertices.data[faces.data[i].vertex_index]
+			&vertices.data[faces.data[i+1].vertex_index],
+			&vertices.data[faces.data[i+2].vertex_index]
 		};
 
 		js << '\t';

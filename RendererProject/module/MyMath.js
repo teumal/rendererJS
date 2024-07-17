@@ -119,6 +119,58 @@ export class Vector2 {
        const size = 1 / this.magnitude;
        return this.mul(size);
     }
+
+
+    /*******************
+     * for optimizing
+     ******************/
+
+    // 이 벡터의 성분을 x,y 로 세팅합니다.
+    assign(x,y) {
+        this.x = x;
+        this.y = y;
+        return this;
+    }
+
+    // 이 벡터의 성분을 v 의 성분들로 세팅합니다.
+    assignVector(v) {
+        this.x = v.x;
+        this.y = v.y;
+        return this;
+    }
+
+
+    // add() 함수와 같되, out 으로 결과를 출력합니다.
+    addNonAlloc(out, ...args) {
+        out.assignVector(this);
+
+        for(const arg of args) {
+            out.x += arg.x;
+            out.y += arg.y;
+        }
+        return out;
+    }
+
+
+    // sub() 함수와 같되, out 으로 결과를 출력합니다.
+    subNonAlloc(out, ...args) {
+        out.assignVector(this);
+
+        for(const arg of args) {
+            out.x -= arg.x;
+            out.y -= arg.y;
+        }
+        return out;
+    }
+
+
+    // mul() 함수와 같되, out 으로 결과를 출력합니다.
+    mulNonAlloc(out, scalar) {
+        return out.assign(
+            this.x * scalar,
+            this.y * scalar
+        );
+    }
 };
 
 export class Matrix2x2 {
@@ -333,6 +385,83 @@ export class Vector3 {
       const size = 1 / this.magnitude;
       return this.mul(size);
    }
+
+
+    /*******************
+     * for optimizing
+     ******************/
+
+    // cross() 와 같되, 결과를 out 에 담습니다.
+    static crossNonAlloc(out, u,v) {
+
+        return out.assign(
+            u.y*v.z - u.z*v.y,
+            u.z*v.x - u.x*v.z,
+            u.x*v.y - u.y*v.x
+         );
+    }
+
+    // 이 벡터의 각 성분들을 x,y,z 로 세팅합니다.
+    assign(x,y,z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+    }
+
+    // 이 벡터의 각 성분들을 v 의 성분들로 세팅합니다.
+    assignVector(v) {
+        this.x = v.x;
+        this.y = v.y;
+        this.z = v.z;
+        return this;
+    }
+
+
+    // add() 와 같되, 결과를 out 에 담습니다.
+    addNonAlloc(out, ...args) {
+        out.assignVector(this);
+
+        for(const arg of args) {
+            out.x += arg.x;
+            out.y += arg.y;
+            out.z += arg.z;
+        }
+        return out;
+    }
+
+
+    // sub() 와 같되, 결과를 out 에 담습니다.
+    subNonAlloc(out, ...args) {
+        out.assignVector(this);
+
+        for(const arg of args) {
+            out.x -= arg.x;
+            out.y -= arg.y;
+            out.z -= arg.z;
+        }
+        return out;
+    }
+
+
+    // mul() 과 같되, 결과를 out 에 담습니다.
+    mulNonAlloc(out, scalar) {
+        return out.assign(
+            this.x * scalar,
+            this.y * scalar,
+            this.z * scalar
+        );
+    }
+
+
+    // mulVector() 와 같되, 결과를 out 에 담습니다.
+    mulVectorNonAlloc(out, v) {
+        return out.assign(
+            this.x * v.x,
+            this.y * v.y,
+            this.z * v.z
+        );
+    }
 };
 
 export class Matrix3x3 {
@@ -530,6 +659,79 @@ export class Vector4 {
    // 벡터와 벡터끼리 곱한 결과를 돌려줍니다.
    mulVector(v) {
        return new Vector4(
+           this.x * v.x,
+           this.y * v.y,
+           this.z * v.z,
+           this.w * v.w
+       );
+   }
+
+
+   /*****************
+    * for optimizing
+    *****************/
+
+   // 이 벡터의 각 성분들을 x,y,z,w 로 세팅합니다.
+   assign(x,y,z,w) {
+       this.x = x;
+       this.y = y;
+       this.z = z;
+       this.w = w;
+       return this;
+   }
+
+
+   // 이 벡터의 각 성분들을 v 의 성분들로 세팅합니다.
+   assignVector(v) {
+       this.x = v.x;
+       this.y = v.y;
+       this.z = v.z;
+       this.w = v.w;
+       return this;
+   }
+
+
+   // add() 와 같되, 결과를 out 에 담습니다.
+   addNonAlloc(out, ...args) {
+       out.assignVector(this);
+
+       for(const arg of args) {
+           out.x += arg.x;
+           out.y += arg.y;
+           out.z += arg.z;
+           out.w += arg.w;
+       }
+       return out;
+   }
+
+   // sub() 와 같되, 결과를 out 에 담습니다.
+   subNonAlloc(out, ...args) {
+        out.assignVector(this);
+
+        for(const arg of args) {
+            out.x -= arg.x;
+            out.y -= arg.y;
+            out.z -= arg.z;
+            out.w -= arg.w;
+        }
+        return out;
+   }
+
+
+   // mul() 과 같되, 결과를 out 에 담습니다.
+   mulNonAlloc(out, scalar) {
+       return out.assign(
+           this.x * scalar,
+           this.y * scalar,
+           this.z * scalar,
+           this.w * scalar
+       );
+   }
+
+
+   // 벡터와 벡터끼리 곱한 결과를 돌려줍니다.
+   mulVectorNonAlloc(out, v) {
+       return out.assign(
            this.x * v.x,
            this.y * v.y,
            this.z * v.z,
@@ -854,6 +1056,77 @@ export class Matrix4x4 {
            new Vector4(inv[2]*invDet, inv[6]*invDet, inv[10]*invDet, inv[14]*invDet),
            new Vector4(inv[3]*invDet, inv[7]*invDet, inv[11]*invDet, inv[15]*invDet)
        );
+   }
+
+
+   /******************
+    * for optimizing
+    ******************/
+
+   static #temp = Matrix4x4.identity;
+
+   assign(mat) {
+       this.basisX.assignVector(mat.basisX);
+       this.basisY.assignVector(mat.basisY);
+       this.basisZ.assignVector(mat.basisZ);
+       this.basisW.assignVector(mat.basisW);
+       return this;
+   }
+
+   transposeNonAlloc(out) {
+        out.basisX.assign(this.basisX.x, this.basisY.x, this.basisZ.x, this.basisW.x);
+        out.basisY.assign(this.basisX.y, this.basisY.y, this.basisZ.y, this.basisW.y);
+        out.basisZ.assign(this.basisX.z, this.basisY.z, this.basisZ.z, this.basisW.z);
+        out.basisW.assign(this.basisX.w, this.basisY.w, this.basisZ.w, this.basisW.w);
+        return out;
+   }
+
+   // mulMat() 와 같되, out 을 결과로 사용합니다.
+   mulMatNonAlloc(out, ...mats) {
+        out.assign(this); // out : Matrix4x4
+
+        for(const mat of mats) {
+            const matT = mat.transposeNonAlloc(Matrix4x4.#temp);
+
+            out.basisX.assign(
+                Vector4.dot(matT.basisX, out.basisX),
+                Vector4.dot(matT.basisY, out.basisX),
+                Vector4.dot(matT.basisZ, out.basisX),
+                Vector4.dot(matT.basisW, out.basisX)
+            );
+            out.basisY.assign(
+                Vector4.dot(matT.basisX, out.basisY),
+                Vector4.dot(matT.basisY, out.basisY),
+                Vector4.dot(matT.basisZ, out.basisY),
+                Vector4.dot(matT.basisW, out.basisY)
+            );
+            out.basisZ.assign(
+                Vector4.dot(matT.basisX, out.basisZ),
+                Vector4.dot(matT.basisY, out.basisZ),
+                Vector4.dot(matT.basisZ, out.basisZ),
+                Vector4.dot(matT.basisW, out.basisZ)
+            );
+            out.basisW.assign(
+                Vector4.dot(matT.basisX, out.basisW),
+                Vector4.dot(matT.basisY, out.basisW),
+                Vector4.dot(matT.basisZ, out.basisW),
+                Vector4.dot(matT.basisW, out.basisW)
+            );
+        }
+        return out;
+   }
+
+
+   // mulVector() 와 같되, 결과를 out 으로 저장합니다.
+   mulVectorNonAlloc(out, v) {
+        const matT = this.transposeNonAlloc(Matrix4x4.#temp);
+
+        return out.assign(
+            Vector4.dot(matT.basisX, v),
+            Vector4.dot(matT.basisY, v),
+            Vector4.dot(matT.basisZ, v),
+            Vector4.dot(matT.basisW, v)
+        );
    }
 };
 

@@ -46,7 +46,8 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 
 **EDIT 24/7/17**: Renderer.drawMesh 함수 최적화. 퍼포먼스 향상. 프레임이 많이 안정화됨
 
-**EDIT 24/7/18**: testOrigin, clipOrigin 함수 삭제. 이 프로젝트에서 zNear 는 항상 0보다 크다고 가정하기 때문. 결과적으로 캐릭터가 카메라와 근접했을 때, 약간의 성능 증가
+**EDIT 24/7/18**: testOrigin, clipOrigin 함수 삭제. 이 프로젝트에서 zNear 는 항상 0보다 크다고 가정하기 때문. 결과적으로 캐릭터가 카메라와 근접했을 때, 약간의 성능 증가. 
+MyMath 에 NonAlloc 버전의 함수들을 추가. 
 
 <br>
 <br>

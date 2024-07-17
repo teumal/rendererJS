@@ -608,6 +608,162 @@ export class Transform {
         // 로컬 트랜스폼 재계산
         this.calculateLocal();
     }
+
+
+    /***************
+     * for optimizing
+     ***************/
+
+    static #temp0 = Matrix4x4.identity; // for invTRSNonAlloc, modelNonAlloc, invWorldTRSNonAlloc, TRSNonAlloc
+    static #temp1 = Matrix4x4.identity; // for invTRSNonAlloc, modelNonAlloc, invWorldTRSNonAlloc, TRSNonAlloc
+    static #temp2 = Matrix4x4.identity; // for invTRSNonAlloc, TRSNonAlloc
+    static #temp3 = Matrix4x4.identity; // for eulerNonAlloc, 
+    static #temp4 = Matrix4x4.identity; // for eulerNonAlloc, 
+    static #temp5 = Matrix4x4.identity; // for eulerNonAlloc, 
+
+    // euler() 와 같되, out 으로 결과를 출력합니다.
+    static eulerNonAlloc(out, localRotation, invert=false) {
+        const rotX = localRotation.x * MyMath.deg2rad;
+        const rotY = localRotation.y * MyMath.deg2rad;
+        const rotZ = localRotation.z * MyMath.deg2rad;
+
+        const sinX = Math.sin(rotX), cosX = Math.cos(rotX); // x축 회전에 쓰일 Sin, Cos 값
+        const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
+        const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
+
+        const yaw   = Transform.#temp3;
+        const pitch = Transform.#temp4;
+        const roll  = Transform.#temp5;
+
+        yaw.basisX.assign(cosY, 0, -sinY, 0);
+        yaw.basisY.assign(0, 1, 0, 0);
+        yaw.basisZ.assign(sinY, 0, cosY, 0);
+        yaw.basisW.assign(0, 0, 0, 1);
+
+        pitch.basisX.assign(1, 0, 0, 0);
+        pitch.basisY.assign(0, cosX, sinX, 0);
+        pitch.basisZ.assign(0, -sinX, cosX, 0);
+        pitch.basisW.assign(0, 0, 0, 1);
+
+        roll.basisX.assign(cosZ, -sinZ, 0, 0);
+        roll.basisY.assign(sinZ, cosZ, 0, 0);
+        roll.basisZ.assign(0, 0, 1, 0);
+        roll.basisW.assign(0, 0, 0, 1);
+
+        if(invert) {
+            const invYaw   = yaw.transposeNonAlloc(yaw);
+            const invPitch = pitch.transposeNonAlloc(pitch);
+            const invRoll  = roll.transposeNonAlloc(roll);
+            return invRoll.mulMatNonAlloc(out, invPitch, invYaw);
+        }
+        return yaw.mulMatNonAlloc(out, pitch, roll);
+    }
+
+
+    // invTRS() 와 같되, 결과를 out 으로 출력합니다.
+    static invTRSNonAlloc(out, position, scale, rotation) {
+        const invS = Transform.#temp0;
+        const invR = Transform.eulerNonAlloc(Transform.#temp1, rotation, true);
+        const invT = Transform.#temp2;
+
+        invS.basisX.assign(1/scale.x, 0, 0, 0);
+        invS.basisY.assign(0, 1/scale.y, 0, 0);
+        invS.basisZ.assign(0, 0, 1/scale.z, 0);
+        invS.basisW.assign(0,0,0,1);
+
+        invT.basisX.assign(1,0,0,0);
+        invT.basisY.assign(0,1,0,0);
+        invT.basisZ.assign(0,0,1,0);
+        invT.basisW.assign(-position.x, -position.y, -position.z, 1);
+
+        return invT.mulMatNonAlloc(out, invR, invS);
+    }
+
+
+    // model() 과 같되, 결과를 out 으로 출력합니다.
+    modelNonAlloc(out) { 
+        const scale    = this.#worldScale;
+        const position = this.#worldPosition;
+
+        const S = Transform.#temp0;
+        const R = this.#worldRotation;
+        const T = Transform.#temp1;
+
+        S.basisX.assign(scale.x, 0, 0, 0);
+        S.basisY.assign(0, scale.y, 0, 0);
+        S.basisZ.assign(0, 0, scale.z, 0);
+        S.basisW.assign(0, 0, 0, 1);
+
+        T.basisX.assign(1,0,0,0);
+        T.basisY.assign(0,1,0,0);
+        T.basisZ.assign(0,0,1,0);
+        T.basisW.assign(position.x, position.y, position.z, 1);
+
+        return S.mulMatNonAlloc(out, R, T);
+    }
+
+
+    // invWorldTRS() 와 같되, 결과를 out에 저장합니다.
+    invWorldTRSNonAlloc(out) {
+        const scale    = this.#worldScale;
+        const position = this.#worldPosition;
+
+        const S = Transform.#temp0;
+        const R = this.#invWorldRotation;
+        const T = Transform.#temp1;
+
+        S.basisX.assign(1/scale.x, 0, 0, 0);
+        S.basisY.assign(0, 1/scale.y, 0, 0);
+        S.basisZ.assign(0, 0, 1/scale.z, 0);
+        S.basisW.assign(0, 0, 0, 1);
+
+        T.basisX.assign(1, 0, 0, 0);
+        T.basisY.assign(0, 1, 0, 0);
+        T.basisZ.assign(0, 0, 1, 0);
+        T.basisW.assign(-position.x, -position.y, -position.z, 1);
+
+        return T.mulMatNonAlloc(out, R,S);
+    }
+
+
+    // rodrigues() 와 같되, 결과를 out 에 저장합니다.
+    static rodriguesNonAlloc(out, axis, angle) {
+        angle = MyMath.deg2rad * angle;
+
+        const sin = Math.sin(angle);
+        const cos = Math.cos(angle);
+        const B   = 1-cos;
+        const a   = axis.x;
+        const b   = axis.y;
+        const c   = axis.z;
+
+        out.basisX.assign((cos+a*a*B),    (sin*c+b*a*B),  (sin*-b+c*a*B), 0);
+        out.basisY.assign((sin*-c+a*b*B), (cos+b*b*B),    (sin*a+c*b*B),  0);
+        out.basisZ.assign((sin*b+a*c*B),  (sin*-a+b*c*B), (cos+c*c*B),    0);
+        out.basisW.assign(0,0,0,1);
+
+        return out;
+    }
+
+
+    // TRS() 와 같되, 결과를 out 에 저장합니다.
+    static TRSNonAlloc(out, position, scale, rotation) {
+        const S = Transform.#temp0;
+        const R = Transform.eulerNonAlloc(Transform.#temp1, rotation);
+        const T = Transform.#temp2;
+
+        S.basisX.assign(scale.x, 0, 0, 0);
+        S.basisY.assign(0, scale.y, 0, 0);
+        S.basisZ.assign(0, 0, scale.z, 0);
+        S.basisW.assign(0, 0, 0, 1);
+
+        T.basisX.assign(1,0,0,0);
+        T.basisY.assign(0,1,0,0);
+        T.basisZ.assign(0,0,1,0);
+        T.basisW.assign(position.x, position.y, position.z, 1);
+
+        return S.mulMatNonAlloc(out, R, T);
+    }
 };
 
 
@@ -696,16 +852,48 @@ export class Camera {
     stretchNDC(p) {
         const halfw = this.screenSize.x * 0.5 / Camera.tileSize;
         const halfh = this.screenSize.y * 0.5 / Camera.tileSize;
-        return new Vector3(p.x * halfw, p.y * halfh, p.z);
+        return new Vector4(p.x * halfw, p.y * halfh, p.z);
     }
 
     // 카메라의 종횡비를 돌려줍니다. 종횡비는 w * a = h 의 a 를 의미합니다.
     get aspectRatio() {  return this.screenSize.x / this.screenSize.y; }
+
+
+    /****************
+     * for optimizing
+     ***************/
+
+    // perspective() 와 같되, out 에 결과를 저장합니다.
+    perspectiveNonAlloc(out) {
+        const d = 1 / Math.tan(this.fov * MyMath.deg2rad * 0.5);
+        const a = this.aspectRatio;
+ 
+        const nearMinusFar = this.zNear - this.zFar;
+        const nearPlusFar  = this.zNear + this.zFar;
+ 
+        const l = -this.zNear + (nearPlusFar / nearMinusFar) * this.zNear;
+        const k = -(nearPlusFar) / nearMinusFar;
+
+        out.basisX.assign(d/a, 0, 0, 0);
+        out.basisY.assign(0, d, 0, 0);
+        out.basisZ.assign(0, 0, k, 1);
+        out.basisW.assign(0, 0, l, 0);
+
+        return out;
+    }
+
+
+    // view() 와 같되, out 에 결과를 저장합니다.
+    viewNonAlloc(out) { return this.transform.invWorldTRSNonAlloc(out); }
 };
 
 
 export class GameObject {
    static #instances = [];
+
+   static #temp0 = Matrix4x4.identity;
+   static #temp1 = Matrix4x4.identity;
+   static #temp2 = Matrix4x4.identity;
 
    transform = null; 
    renderer  = null;
@@ -768,10 +956,10 @@ export class GameObject {
                 continue;
             }
             const camera      = gameObject.renderer.camera;
-            const view        = camera.view();
-            const model       = gameObject.transform.model();
-            const perspective = camera.perspective();
-            const finalMat    = model.mulMat(view, perspective);
+            const view        = camera.viewNonAlloc(GameObject.#temp0);
+            const model       = gameObject.transform.modelNonAlloc(GameObject.#temp1);
+            const perspective = camera.perspectiveNonAlloc(GameObject.#temp2);
+            const finalMat    = model.mulMatNonAlloc(model, view, perspective);
 
             const frustum  = new MyMath.Frustum(finalMat);
             const mesh     = gameObject.renderer.mesh;
@@ -1175,10 +1363,15 @@ export class BoxCollider {
 export class Bone {
     static renderer = null;
 
+    static #temp0 = Matrix4x4.identity;
+    static #temp1 = Matrix4x4.identity;
+
     bindPose       = null;  // 본의 최초 트랜스폼.
     $transform     = null;  // 본의 트랜스폼.
     $isDirty       = true;
-    #skeletalCache = null;
+    #skeletalCache = Matrix4x4.identity;
+    #drawBoneCache = Matrix4x4.identity;
+    $bindPoseDirty = true;
 
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
@@ -1277,13 +1470,13 @@ export class Bone {
     // 재생성합니다.
     skeletal() {
         
-        if(this.#skeletalCache == null || this.$isDirty) {
+        if(this.$isDirty) {
             this.$isDirty = false;
             const pose = this.bindPose;
 
-            const invBindPose = Transform.invTRS(pose.position, pose.scale, pose.rotation);
-            const local       = this.$transform.model();
-            return this.#skeletalCache = invBindPose.mulMat(local);
+            const invBindPose = Transform.invTRSNonAlloc(Bone.#temp0, pose.position, pose.scale, pose.rotation);
+            const local       = this.$transform.modelNonAlloc(Bone.#temp1);
+            return invBindPose.mulMatNonAlloc(this.#skeletalCache, local);
         }
         return this.#skeletalCache;
     }
@@ -1295,33 +1488,38 @@ export class Bone {
         const parent = this.#parent;
 
         if(this.#parent!=null) {
-            const pose0 = this.bindPose;
-            const pose1 = parent.bindPose;
 
-            const diff   = pose0.position.sub(pose1.position);
-            const length = diff.magnitude;
-            const lookAt = diff.normalized;
-            const axis   = Vector3.cross(Vector3.up, lookAt);
+            if(this.$bindPoseDirty) {
+                const pose0 = this.bindPose;
+                const pose1 = parent.bindPose;
 
-            const acosInput = MyMath.clamp(Vector3.dot(lookAt, Vector3.up), -1, 1);
-            let   angle     = Math.acos(acosInput) * MyMath.rad2deg;
+                const diff   = pose0.position.sub(pose1.position);
+                const length = diff.magnitude;
+                const lookAt = diff.normalized;
+                const axis   = Vector3.cross(Vector3.up, lookAt);
 
-            const scale = new Matrix4x4(
-               new Vector4(1, 0, 0, 0),
-               new Vector4(0, length, 0, 0),
-               new Vector4(0, 0, 1, 0),
-               new Vector4(0, 0, 0, 1)
-            );
-            const rotate   = Transform.rodrigues(axis, angle);
-            const translate = new Matrix4x4(
-                new Vector4(1, 0, 0, 0),
-                new Vector4(0, 1, 0, 0),
-                new Vector4(0, 0, 1, 0),
-                diff.mul(-1).toVector4()
-            ); 
+                const acosInput = MyMath.clamp(Vector3.dot(lookAt, Vector3.up), -1, 1);
+                let   angle     = Math.acos(acosInput) * MyMath.rad2deg;
 
-            const bindPose = Transform.TRS(pose0.position, pose0.scale, pose0.rotation);
-            finalMat = scale.mulMat(rotate, translate, bindPose, finalMat);
+                const scale = new Matrix4x4(
+                    new Vector4(1, 0, 0, 0),
+                    new Vector4(0, length, 0, 0),
+                    new Vector4(0, 0, 1, 0),
+                    new Vector4(0, 0, 0, 1)
+                );
+                const rotate   = Transform.rodrigues(axis, angle);
+                const translate = new Matrix4x4(
+                    new Vector4(1, 0, 0, 0),
+                    new Vector4(0, 1, 0, 0),
+                    new Vector4(0, 0, 1, 0),
+                    diff.mul(-1).toVector4()
+                ); 
+                const bindPose = Transform.TRS(pose0.position, pose0.scale, pose0.rotation);
+                scale.mulMatNonAlloc(this.#drawBoneCache, rotate, translate, bindPose);
+
+                this.$bindPoseDirty = false;
+            }
+            finalMat = this.#drawBoneCache.mulMatNonAlloc(Bone.#temp0, finalMat);
 
             Bone.renderer.wireFrameColor = this.boneColor;
             Bone.renderer.drawMesh(finalMat);

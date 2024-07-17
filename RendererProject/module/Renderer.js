@@ -107,15 +107,15 @@ export class Material {
     mainTex       = null; // 메인 텍스쳐
     triangleCount = 0;    // 영향을 미칠 삼각형의 갯수. 
 
-    vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 정점 셰이더
-    fragmentShader = (uv,pos)=>{ return Renderer.tex2D(this.mainTex, uv); };     // 픽셀 셰이더
+    vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVectorNonAlloc(vertex,vertex); }; // 정점 셰이더
+    fragmentShader = (uv,pos)=>{ return Renderer.tex2D(this.mainTex, uv); };                    // 픽셀 셰이더
 }
 
 
 export class Renderer {
-    static mode = false;
+    static #triangleList  = new Array(100);
+    static #instanceCount = 0;
 
-    triangleList = new Array(100);
     camera       = Camera.mainCamera; 
     mainTexture  = null;
     mesh         = null;
@@ -124,73 +124,68 @@ export class Renderer {
     wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
     backfaceCulling = true;        // 백페이스 컬링 적용 여부
 
-    #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVector(vertex); }; // 디폴트 정점 셰이더
-    #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };            // 디폴트 픽셀 셰이더
+    #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVectorNonAlloc(vertex,vertex); }; // 디폴트 정점 셰이더
+    #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };                           // 디폴트 픽셀 셰이더
 
     materials = null; // SubMesh 들을 위해 사용합니다. 
+
+    static #temp0 = new Vector4(); // Vector4 타입의 임시변수.
+    static #temp1 = new Vector4(); // Vector4 타입의 임시변수.
+    static #temp2 = new Vector2(); // Vector2 타입의 임시변수.
+    static #temp3 = new Vector2(); // Vector2 타입의 임시변수.
+    static #temp4 = new Vector2(); // Vector2 타입의 임시변수.
+    static #temp5 = new Vector2(); // Vector2 타입의 임시변수.
+    static #temp6 = new Vector2(); // Vector2 타입의 임시변수.
+    static #temp7 = new Vector3(); // Vector3 타입의 임시변수.
+
 
     static #testFunc = [
 
         //#region function testOrigin(p) is deleted
-        // 주어진 점이 원점 밖에 위치하는지 판정합니다.
-        // function testOrigin(p) {
-        //     return p.w < 0 ? 1 : 0;
-        // },
+        // 주어진 점이 원점 밖에 위치하는지 판정합니다 
+        // function testOrigin(p) { return p.w < 0 ? 1 : 0; },
         //#endregion
 
         // 주어진 점이 근평면의 밖에 위치하는지 판정합니다.
-        function testNear(p) {
-            return p.z < -p.w ? 1 : 0;
-        },
+        function testNear(p) { return p.z < -p.w ? 1 : 0; },
 
         // 주어진 점이 원평면의 밖에 위치하는지 판정합니다.
-        function testFar(p) {
-            return p.z > p.w ? 1 : 0;
-        },
-
+        function testFar(p) { return p.z > p.w ? 1 : 0; },
 
         // 주어진 점이 절두체의 좌측 평면 밖에 위치하는지 판정합니다.
-        function testLeft(p) {
-            return p.x < -p.w ? 1 : 0;
-        },
-
+        function testLeft(p) { return p.x < -p.w ? 1 : 0; },
 
         // 주어진 점이 절두체의 우측 평면 밖에 위치하는지 판정합니다.
-        function testRight(p) {
-            return p.x > p.w ? 1 : 0;
-        },
+        function testRight(p) { return p.x > p.w ? 1 : 0; },
 
         // 주어진 점이 절두체의 상단 평면 밖에 위치하는지 판정합니다.
-        function testTop(p) {
-            return p.y > p.w ? 1 : 0;
-        },
-
+        function testTop(p) { return p.y > p.w ? 1 : 0; },
 
         // 주어진 점이 절두체의 하단 평면 밖에 위치하는지 판정합니다.
-        function testBottom(p) {
-            return p.y < -p.w ? 1 : 0;
-        }
+        function testBottom(p) { return p.y < -p.w ? 1 : 0; }
     ];
 
     static #clipFunc = [
 
-        //#region function clipOrigin(p0,p1) is deleted
+        //#region function clipOrigin(p0,p1,result) is deleted
         // 원점을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        // function clipOrigin(p0, p1) {
+        // function clipOrigin(p0, p1, result) {
         //     const s = p1.position.w / (p0.position.w-p1.position.w);
             
-        //     const uvClip = p0.uv.mul(s).add(
-        //         p1.uv.mul(1-s)
-        //     );
-        //     const positionClip = p0.position.mul(s).add(
-        //         p1.position.mul(1-s)
-        //     );
-        //     return { position : positionClip, uv : uvClip };
+        //     const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+        //     const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+        //     const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+        //     const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+        //     temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+        //     temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+        //     return result; // { position: Vector4, uv: Vector2 }
         // },
         //#endregion
 
         // 근평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipNear(p0, p1) {
+        function clipNear(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
             
@@ -201,34 +196,38 @@ export class Renderer {
 
             const s = (-w1-z1) / (z0-z1+w0-w1);
             
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = p0.position.mul(s).add(
-                p1.position.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
+            const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+            const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+            const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+            const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+            temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+            temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+            return result; // { position: Vector4, uv: Vector2 }
         },
 
 
         // 원평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipFar(p0, p1) {
+        function clipFar(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
             const s    = (pos1.w-pos1.z) / (pos0.z-pos1.z-pos0.w+pos1.w);
             
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = p0.position.mul(s).add(
-                p1.position.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
+            const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+            const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+            const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+            const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+            temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+            temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+            return result; // { position: Vector4, uv: Vector2 }
         },
 
 
         // 좌측평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipLeft(p0, p1) {
+        function clipLeft(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
             
@@ -239,50 +238,56 @@ export class Renderer {
 
             const s = (-w1-x1) / (x0-x1+w0-w1);
 
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = pos0.mul(s).add(
-                pos1.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
+            const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+            const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+            const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+            const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+            temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+            temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+            return result; // { position: Vector4, uv: Vector2 }
         },
 
 
         // 우측 평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipRight(p0, p1) {
+        function clipRight(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
             const s    = (pos1.w-pos1.x) / (pos0.x-pos1.x-pos0.w+pos1.w);
 
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = pos0.mul(s).add(
-                pos1.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
+            const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+            const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+            const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+            const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+            temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+            temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+            return result; // { position: Vector4, uv: Vector2 }
         },
 
 
         // 상단평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipTop(p0, p1) {
+        function clipTop(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
             const s    = (pos1.w-pos1.y) / (pos0.y-pos1.y-pos0.w+pos1.w);
 
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = pos0.mul(s).add(
-                pos1.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
+            const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+            const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+            const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+            const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+            temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+            temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+            return result; // { position: Vector4, uv: Vector2 }
         },
 
 
         // 하단평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipBottom(p0, p1) {
+        function clipBottom(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
             
@@ -293,13 +298,15 @@ export class Renderer {
 
             const s = (-w1-y1) / (y0-y1+w0-w1);
 
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = pos0.mul(s).add(
-                pos1.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
+            const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
+            const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
+            const temp2 = p0.position.mulNonAlloc(Renderer.#temp0, s);   // p0.position * s
+            const temp3 = p1.position.mulNonAlloc(Renderer.#temp1, 1-s); // p1.position * (1-s)
+            
+            temp0.addNonAlloc(result.uv, temp1);       // uvClip       = (p0.uv * s) + (p1.uv * (1-s))
+            temp2.addNonAlloc(result.position, temp3); // positionClip = (p0.position * s) + (p1.position * (1-s))
+
+            return result; // { position: Vector4, uv: Vector2 }
         }
     ];
 
@@ -319,9 +326,8 @@ export class Renderer {
     // 격자에 `from` 에서 `to` 를 잇는 선을 그립니다.
     // `from`, `to` 는 항상 월드 좌표계 위의 점이어야 합니다.
     drawLine2D(from, to, color=Color.black) {
-        from = this.camera.worldToScreen(from);
-        to   = this.camera.worldToScreen(to);
-
+        from = this.#worldToScreen(Renderer.#temp2, from);
+        to   = this.#worldToScreen(Renderer.#temp3, to);
 
         // 그릴 선이 화면을 벗어나지 않도록 조정
         from.x = MyMath.clamp(from.x, 0, this.camera.screenSize.x);
@@ -457,17 +463,36 @@ export class Renderer {
             const weights   = p.weight.weights;   // 가중치들의 목록
             const boneCount = p.weight.boneCount; // 본들의 갯수
 
-            let result = Vector3.zero; // 혼합된 결과
+            let result = Renderer.#temp0.assign(0,0,0,0); // 혼합된 결과.
 
             for(let i=0; i<boneCount; ++i) {
                 const bone   = this.mesh.bones[boneNames[i] ];
                 const weight = weights[i];
                 let   model  = bone.skeletal();
 
-                result = result.add(model.mulVector(p.position).mul(weight) ); // 각 본의 최종행렬을 적용후, 가중치를 곱한다.
+                // 각 본의 최종행렬을 적용후, 가중치를 곱한다.
+                const temp0 = model.mulVectorNonAlloc(Renderer.#temp1, p.position); // model * p.position
+                const temp1 = temp0.mulNonAlloc(temp0, weight);                     // weight * (model * p.position)
+
+                result.addNonAlloc(result, temp1); // result += temp1
             }
-            p.position = result.toVector4(1);
+            p.position.assign(result.x, result.y, result.z, 1); // p.position = (result,1)
         }
+    }
+
+
+    // index 번호에 있는 삼각형 객체를 얻습니다.
+    #getTriangle(index) {
+
+        if(Renderer.#instanceCount == index) {
+
+            return Renderer.#triangleList[Renderer.#instanceCount++] = {
+                p0: { position: new Vector4(), uv: new Vector2(), weight: null }, 
+                p1: { position: new Vector4(), uv: new Vector2(), weight: null }, 
+                p2: { position: new Vector4(), uv: new Vector2(), weight: null }
+            };
+        }
+        return Renderer.#triangleList[index];
     }
 
 
@@ -481,7 +506,7 @@ export class Renderer {
         let materialAffect = 0; // 현재 머터리얼로 그려야할 삼각형의 갯수
         
         for(let i=0; i<triangleCount; ++i) {
-            const original = this.mesh.getTriangle(i);
+            const original = this.mesh.setTriangle(this.#getTriangle(0), i);
             let   listSize = 1;
             
             if(this.mesh.type==MeshType.Skinned) { // 스켈레탈 애니메이션. 본을 가지고 있다면,
@@ -492,14 +517,14 @@ export class Renderer {
             original.p0.position = this.#vertexShader(original.p0.position, finalMat);
             original.p1.position = this.#vertexShader(original.p1.position, finalMat);
             original.p2.position = this.#vertexShader(original.p2.position, finalMat);
-            this.triangleList[0] = original;
+
 
             // `original` 삼각형이 절두체에 꼭 맞을 때까지 쪼갠다.
             // 총 7개의 평면에 대해서 수행한다: near, far, top, bottom, left, right
             for(let i=0; i<6; ++i) {
 
                 for(let j=0; j<listSize; ++j) {
-                    const triangle = this.triangleList[j];
+                    const triangle = Renderer.#triangleList[j];
                     let   p0       = triangle.p0;
                     let   p1       = triangle.p1;
                     let   p2       = triangle.p2;
@@ -511,8 +536,8 @@ export class Renderer {
 
                     // 세 점이 모두 평면의 바깥에 위치한다면, 그리기에서 제외한다.
                     if(count==3) {
-                        this.triangleList[j--]      = this.triangleList[--listSize];
-                        this.triangleList[listSize] = null;
+                        Renderer.#triangleList[j--]      = Renderer.#triangleList[--listSize];
+                        Renderer.#triangleList[listSize] = triangle;
                     }
 
                     // 두 점만 평면의 바깥에 위치한 경우, 삼각형의 일부를 잘라준다.
@@ -522,8 +547,8 @@ export class Renderer {
                             if     (result1==1) { p0=triangle.p2; p1=triangle.p0; p2=triangle.p1; }
                             else if(result2==1) { p0=triangle.p1; p1=triangle.p2; p2=triangle.p0; }
                         }
-                        const p01Clip = Renderer.#clipFunc[i](p0,p1);
-                        const p02Clip = Renderer.#clipFunc[i](p0,p2);
+                        const p01Clip = Renderer.#clipFunc[i](p0,p1, p1);
+                        const p02Clip = Renderer.#clipFunc[i](p0,p2, p2);
 
                         triangle.p0 = p0;
                         triangle.p1 = p01Clip;
@@ -535,20 +560,19 @@ export class Renderer {
                         if     (result0==1) { p0=triangle.p1; p1=triangle.p2; p2=triangle.p0; }
                         else if(result1==1) { p0=triangle.p2; p1=triangle.p0; p2=triangle.p1; }
 
-                        const p12Clip = Renderer.#clipFunc[i](p1, p2);
-                        const p02Clip = Renderer.#clipFunc[i](p0, p2);
+                        const newTriangle = this.#getTriangle(listSize++); // p0-p1-p12Clip
 
-                        // 새로운 삼각형을 만들어 `list` 에 넣어준다.
-                        this.triangleList[listSize++] = {
-                            p0            : { position : p0.position.clone(),      uv : p0.uv.clone()      },
-                            p1            : { position : p1.position.clone(),      uv : p1.uv.clone()      },
-                            p2            : { position : p12Clip.position.clone(), uv : p12Clip.uv.clone() },
-                            materialIndex : triangle.materialIndex
-                        };
+                        newTriangle.p0.position.assignVector(p0.position); newTriangle.p0.uv.assignVector(p0.uv); // p0 의 내용을 복사
+                        newTriangle.p1.position.assignVector(p1.position); newTriangle.p1.uv.assignVector(p1.uv); // p1 의 내용을 복사
+                        
+                        const p12Clip = Renderer.#clipFunc[i](p1,p2, newTriangle.p2); // newTriangle.p2 를 p12Clip 으로 초기화
+                        const p02Clip = Renderer.#clipFunc[i](p0,p2, p2);             // p2 를 p02Clip 으로 초기화
 
-                        // 기존의 삼각형은 쪼개진 버전으로 갱신해준다.
+                        p1.position.assignVector(p12Clip.position); p1.uv.assignVector(p12Clip.uv); // p12Clip 의 내용을 복사
+
+                        // 기존의 삼각형은 쪼개진 버전으로 갱신해준다: p0-p12Clip-p02Clip
                         triangle.p0 = p0;
-                        triangle.p1 = p12Clip;
+                        triangle.p1 = p1;
                         triangle.p2 = p02Clip;
                     }
                 }
@@ -556,7 +580,7 @@ export class Renderer {
 
             // 쪼개진 삼각형들을 모두 그려준다.
             for(let i=0; i<listSize; ++i) {
-                const t = this.triangleList[i];
+                const t = Renderer.#triangleList[i];
 
                 if(this.materials != null) {
                     this.drawTriangle(t, this.materials[materialIndex].fragmentShader);
@@ -564,7 +588,9 @@ export class Renderer {
                 else {
                     this.drawTriangle(t, this.#fragmentShader);
                 }
-                this.triangleList[i] = null; // for optimizing GC
+                Renderer.#triangleList[i].p0.weight = null; // for optimizing GC
+                Renderer.#triangleList[i].p1.weight = null; // for optimizing GC
+                Renderer.#triangleList[i].p2.weight = null; // for optimizing GC
             }
 
             // 서브 메시를 사용하고, 현재 머터리얼이 정해진 수의 삼각형에게 영향을 주었다면,
@@ -587,19 +613,22 @@ export class Renderer {
         const zPos2 = triangle.p2.position.w;
 
         // 변환을 최종적으로 마무리 한다.
-        triangle.p0.position = this.toNDCAndStretch(triangle.p0.position);
-        triangle.p1.position = this.toNDCAndStretch(triangle.p1.position);
-        triangle.p2.position = this.toNDCAndStretch(triangle.p2.position);
+        this.#toNDCAndStretch(triangle.p0.position);
+        this.#toNDCAndStretch(triangle.p1.position);
+        this.#toNDCAndStretch(triangle.p2.position);
 
 
         // 백페이스 컬링. 카메라의 시선과 같은 방향이라면 그리기 생략
         if(this.backfaceCulling) {
 
-            const triangleNorm = Vector3.cross(
-                triangle.p0.position.sub(triangle.p2.position),
-                triangle.p1.position.sub(triangle.p2.position)
+            const triangleNorm = Vector3.crossNonAlloc(
+                Renderer.#temp7,
+                triangle.p0.position.subNonAlloc(Renderer.#temp0, triangle.p2.position),
+                triangle.p1.position.subNonAlloc(Renderer.#temp1, triangle.p2.position)
             );
-            if(Vector3.dot(triangleNorm, Vector3.forward) >= 0) {
+            const forward = Renderer.#temp0.assign(0,0,1,0); 
+
+            if(Vector3.dot(triangleNorm, forward) >= 0) {
                 return;
             }
         }
@@ -613,13 +642,13 @@ export class Renderer {
             return;
         }
 
-        // 픽셀화를 위해, 월드 좌표계로 변경
-        const p0 = this.camera.worldToScreen(triangle.p0.position);
-        const p1 = this.camera.worldToScreen(triangle.p1.position);
-        const p2 = this.camera.worldToScreen(triangle.p2.position);
+        // 픽셀화를 위해, 월드 좌표계로 변경. 결과는 Vector2
+        const p0 = this.#worldToScreen(Renderer.#temp2, triangle.p0.position);
+        const p1 = this.#worldToScreen(Renderer.#temp3, triangle.p1.position);
+        const p2 = this.#worldToScreen(Renderer.#temp4, triangle.p2.position); // #temp4 must be preserved
         
-        const u = p0.sub(p2);
-        const v = p1.sub(p2);
+        const u = p0.subNonAlloc(Renderer.#temp5, p2); // #temp5 must be preserved
+        const v = p1.subNonAlloc(Renderer.#temp6, p2); // #temp6 must be preserved
 
         const uu  = Vector2.dot(u,u);
         const vv  = Vector2.dot(v,v);
@@ -651,8 +680,8 @@ export class Renderer {
 
         for(let x=xMin; x<=xMax; ++x) {
             for(let y=yMin; y<=yMax; ++y) {
-                const p  = new Vector2(x,y);
-                const w  = p.sub(p2);
+                const p  = Renderer.#temp2.assign(x,y);        // p = (x,y)
+                const w  = p.subNonAlloc(Renderer.#temp3, p2); // w = p - p2
                 const wu = Vector2.dot(w,u);
                 const wv = Vector2.dot(w,v);
 
@@ -685,9 +714,11 @@ export class Renderer {
 
 
                     // UV 좌표 계산 후, 픽셀쉐이더 적용
-                    const uvPos = uv0.mul(t0).add(uv1.mul(t1), uv2.mul(t2) ); // s*uv0 + t*uv1 + oneMinusST*uv2
-                    let   rgba  = fragmentShader(uvPos, p.toVector3(viewZ) );
-
+                    const uvPos = Renderer.#temp3.assign(
+                        (uv0.x * t0) + (uv1.x * t1) + (uv2.x * t2),
+                        (uv0.y * t0) + (uv1.y * t1) + (uv2.y * t2),
+                    );
+                    const rgba = fragmentShader(uvPos, Renderer.#temp7.assign(p.x, p.y, viewZ));
                     GameEngine.setPixel(p, rgba);
                 }
             }
@@ -696,9 +727,36 @@ export class Renderer {
 
 
     // 클립 좌표를 NDC 좌표계로 변경한 뒤, 종횡비를 곱해 화면 크기만큼 늘려줍니다.
-    toNDCAndStretch(pClip) {
-        const pNDC = this.camera.clipToNDC(pClip);
-        return this.camera.stretchNDC(pNDC);
+    // 결과는 pClip 에 그대로 저장합니다. 결과는 Vector4 입니다.
+    #toNDCAndStretch(pClip) {
+        
+        if(pClip.w==0) {
+            pClip.w = Number.EPSILON;
+        }
+        pClip.mulNonAlloc(pClip, (1/pClip.w) ); // pClip = this.camera.clipToNDC(pClip);
+
+        const halfw = this.camera.screenSize.x * 0.5 / Camera.tileSize;
+        const halfh = this.camera.screenSize.y * 0.5 / Camera.tileSize;
+
+        pClip.assign( // pClip = this.camera.stretchNDC(pClip);
+            pClip.x * halfw,
+            pClip.y * halfh,
+            pClip.z,
+            1
+        );
+    }
+
+
+    // 월드 좌표계를 스크린 좌표계로 변환합니다. 결과는 Vector2 이며,
+    // out 에 그대로 저장합니다.
+    #worldToScreen(out, worldPosition) {
+        const halfw = this.camera.screenSize.x * 0.5;
+        const halfh = this.camera.screenSize.y * 0.5;
+
+        return out.assign(
+            Math.round(worldPosition.x * Camera.tileSize + halfw),
+            Math.round(-worldPosition.y * Camera.tileSize+ halfh)
+        );
     }
 
 
@@ -767,7 +825,7 @@ export class Texture {
            const v = x;
            x = v.x; y = v.y;
         }
-        return this.$colorData[y*this.$width + x].clone();
+        return this.$colorData[y*this.$width + x]; // readonly
     }
 
     // 이미지의 너비를 돌려줍니다.
@@ -808,17 +866,20 @@ export class Mesh {
 
     boneVisible = false; // 본들을 그릴지 말지 여부를 결정합니다. 
 
-    // 임의의 인덱스의 삼각형을 얻습니다. 삼각형은 `p0`, `p1`, `p2` 로 이루어집니다.
-    // 삼각형에 담긴 점들은 원본의 복사본입니다.
-    getTriangle(index) {
+
+    // index 번째 삼각형을 얻습니다. 삼각형은 p0-p1-p2 로 이루어집니다.
+    // 삼각형 데이터는 가비지 생성을 피하기 위해, out 에 저장합니다. 
+    // 이후 out 을 그대로 돌려줍니다.
+    setTriangle(out, index) {
         const startIndex = index * 6;
 
-        const index0 = this.indices[startIndex];
-        const index1 = this.indices[startIndex+1];
-        const index2 = this.indices[startIndex+2];
-        const index3 = this.indices[startIndex+3];
-        const index4 = this.indices[startIndex+4];
-        const index5 = this.indices[startIndex+5];
+        const position0 = this.vertices[this.indices[startIndex] ];
+        const position1 = this.vertices[this.indices[startIndex+1] ];
+        const position2 = this.vertices[this.indices[startIndex+2] ];
+        
+        const uv0 = this.uvs[this.indices[startIndex+3] ];
+        const uv1 = this.uvs[this.indices[startIndex+4] ];
+        const uv2 = this.uvs[this.indices[startIndex+5] ];
 
         let weight0 = null;
         let weight1 = null;
@@ -833,11 +894,11 @@ export class Mesh {
             weight2 = this.weights[startIndex+2];
         }
 
-        return {
-           p0: { position: this.vertices[index0].toVector4(1), uv: this.uvs[index3].clone(), weight: weight0 },
-           p1: { position: this.vertices[index1].toVector4(1), uv: this.uvs[index4].clone(), weight: weight1 },
-           p2: { position: this.vertices[index2].toVector4(1), uv: this.uvs[index5].clone(), weight: weight2 },
-        };
+        out.p0.position.assign(position0.x, position0.y, position0.z, 1); out.p0.uv.assignVector(uv0); out.p0.weight = weight0;
+        out.p1.position.assign(position1.x, position1.y, position1.z, 1); out.p1.uv.assignVector(uv1); out.p1.weight = weight1;
+        out.p2.position.assign(position2.x, position2.y, position2.z, 1); out.p2.uv.assignVector(uv2); out.p2.weight = weight2;
+
+        return out;
     }
 
 

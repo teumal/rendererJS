@@ -131,10 +131,12 @@ export class Renderer {
 
     static #testFunc = [
 
+        //#region function testOrigin(p) is deleted
         // 주어진 점이 원점 밖에 위치하는지 판정합니다.
-        function testOrigin(p) {
-            return p.w < 0 ? 1 : 0;
-        },
+        // function testOrigin(p) {
+        //     return p.w < 0 ? 1 : 0;
+        // },
+        //#endregion
 
         // 주어진 점이 근평면의 밖에 위치하는지 판정합니다.
         function testNear(p) {
@@ -172,18 +174,20 @@ export class Renderer {
 
     static #clipFunc = [
 
+        //#region function clipOrigin(p0,p1) is deleted
         // 원점을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
-        function clipOrigin(p0, p1) {
-            const s = p1.position.w / (p0.position.w-p1.position.w);
+        // function clipOrigin(p0, p1) {
+        //     const s = p1.position.w / (p0.position.w-p1.position.w);
             
-            const uvClip = p0.uv.mul(s).add(
-                p1.uv.mul(1-s)
-            );
-            const positionClip = p0.position.mul(s).add(
-                p1.position.mul(1-s)
-            );
-            return { position : positionClip, uv : uvClip };
-        },
+        //     const uvClip = p0.uv.mul(s).add(
+        //         p1.uv.mul(1-s)
+        //     );
+        //     const positionClip = p0.position.mul(s).add(
+        //         p1.position.mul(1-s)
+        //     );
+        //     return { position : positionClip, uv : uvClip };
+        // },
+        //#endregion
 
         // 근평면을 경계로 p0, p1 사이를 클리핑한 점을 돌려줍니다.
         function clipNear(p0, p1) {
@@ -491,8 +495,8 @@ export class Renderer {
             this.triangleList[0] = original;
 
             // `original` 삼각형이 절두체에 꼭 맞을 때까지 쪼갠다.
-            // 총 7개의 평면에 대해서 수행한다: origin, near, far, top, bottom, left, right
-            for(let i=0; i<7; ++i) {
+            // 총 7개의 평면에 대해서 수행한다: near, far, top, bottom, left, right
+            for(let i=0; i<6; ++i) {
 
                 for(let j=0; j<listSize; ++j) {
                     const triangle = this.triangleList[j];

@@ -229,12 +229,25 @@ struct pmx::index_t {
 		if (size == 1) {
 			int8_t temp;
 			in.read((char*)&temp, 1);
-			data = temp;
+
+			if (type == index_type::VERTEX) {
+				data = uint8_t(temp);
+			}
+			else {
+				data = temp;
+			}
 		}
 		else if (size == 2) {
 			int16_t temp;
 			in.read((char*)&temp, 2);
 			data = temp;
+
+			if (type == index_type::VERTEX) {
+				data = uint16_t(temp);
+			}
+			else {
+				data = temp;
+			}
 		}
 		else {
 			int32_t temp;
@@ -398,6 +411,11 @@ struct pmx::face_list {
 
 		for (uint32_t i = 0; i < count; ++i) {
 			data[i].load(in);
+
+			if (data[i].vertex_index >= vertices.count) {
+				(*pmx::out) << "faces[" << i << "].vertex_index = " << data[i].vertex_index << " is replaced to 0\n\n";
+				data[i].vertex_index = 0;
+			}
 		}
 	}
 
@@ -654,6 +672,11 @@ struct pmx::bone_list {
 void pmx::read(const char* file_name) {
 	std::ifstream in(file_name, std::ios::binary);
 
+	if (!in.is_open()) {
+		std::cerr << "pmx::read() could not open \"" << file_name << "\".";
+		std::abort();
+	}
+
 	SetConsoleOutputCP(65001);
 	header.load(in);
 	info.load(in);
@@ -793,8 +816,8 @@ void pmx::printjs(const char* gameobject_name, std::ofstream& js) {
 
 		js << '\t';
 
-		for (int i = 0; i < 3; ++i) {
-			auto& vertex = *triangle[i];
+		for (int j = 0; j < 3; ++j) {
+			auto& vertex = *triangle[j];
 
 			js << "new Weight(";
 

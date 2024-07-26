@@ -592,6 +592,8 @@ export class Vector4 {
    // 두 벡터들의 내적(dot product)의 결과를 돌려줍니다.
    static dot(u,v) { return (u.x * v.x) + (u.y * v.y) + (u.z * v.z) + (u.w * v.w); }
 
+   // new Vecotr4() 의 축약형입니다.
+   static get zero() { return new Vector4(0,0,0,0); }
 
    // (x,y,z,w) 인 벡터를 생성합니다.
    constructor(x=0, y=0, z=0, w=0) {
@@ -1132,18 +1134,19 @@ export class Matrix4x4 {
 
 
 export class Plane {
-    normal; d;
+    static #temp0 = Vector3.zero;
+
+    planeEq;
 
     // `ax+by+cz+d` 의 계수들인 (a,b,c,d) 를 갖는 4차원 벡터를
     // 받아 `normal` 과 `d` 룰 갖는 평면의 방정식을 정의합니다.
     constructor(planeEq=new Vector4(0,1,0,0)) {
-       this.normal = planeEq.toVector3();
-       this.d      = planeEq.w; 
+       this.planeEq = planeEq;
     }
 
 
     // 평면의 방정식을 나타내는 문자열을 돌려줍니다.
-    toString() { return `normal : ${this.normal}, d : ${this.d}`; }
+    toString() { return `normal : ${this.normal.toVector3()}, d : ${this.d}`; }
 
 
 
@@ -1157,53 +1160,80 @@ export class Plane {
 
     // 평면의 방정식을 정규화시킵니다.
     normalize() {
-        const invMagnitude = 1 / this.normal.magnitude;
+        const invMagnitude = 1 / Plane.#temp0.assignVector(this.planeEq).magnitude;
     
-        this.normal = this.normal.mul(invMagnitude);
-        this.d      = this.d * invMagnitude;
+        this.planeEq.mulNonAlloc(this.planeEq, invMagnitude);
     }
+
+    // 평면의 방정식에서 normal 을 얻습니다.
+    get normal() { return this.planeEq; }
+    set normal(n=Vector3.up) { this.planeEq.assign(n.x, n.y, n.z, this.planeEq.w); }
+
+    get d() { return this.planeEq.w; }
+    set d(dist=0) { this.planeEq.w = dist; }
 };
 
 
 export class Frustum {
-    planes;
+    static #temp0 = Matrix4x4.identity;
 
-    // 카메라의 설정을 바탕으로 6개의 평면을 가지는
-    // 절두체를 생성합니다.
-    constructor(finalMat) {
-        //#region Old 
-        // const fov1_2 = camera.fov * 0.5 * deg2rad;
-        // const sin    = Math.sin(fov1_2);
-        // const cos    = Math.cos(fov1_2);
-        // const invA   = 1 / camera.aspectRatio;
+    planes = null;
 
-        // const top    = new Plane(new Vector4(0, cos, -sin, 0) );      // 절두체 상단
-        // const bottom = new Plane(new Vector4(0, -cos, -sin, 0) );     // 절두체 하단
-        // const left   = new Plane(new Vector4(-cos, 0, -sin, 0) );     // 절두체 좌측
-        // const right  = new Plane(new Vector4(cos, 0, -sin, 0) );      // 절두체 우측
-        // const near   = new Plane(new Vector4(0,0,-1, camera.zNear) ); // 근평면
-        // const far    = new Plane(new Vector4(0,0,1, -camera.zFar) );  // 원평면
+    // finalMat를 바탕으로 6개의 평면을 가지는 절두체를 생성합니다.
+    constructor(finalMat=null) {
 
-        // this.#planes = [top, bottom, left, right, near, far];
-        //#endregion
+        if(finalMat == null) {
+            this.planes = [new Plane(), new Plane(), new Plane(), new Plane(), new Plane(), new Plane()];
+            return;
+        }
+        const finalMatT = finalMat.transposeNonAlloc(Frustum.#temp0);
 
-        const finalMatT = finalMat.transpose();
+        const M0 = finalMatT.basisX;
+        const M1 = finalMatT.basisY;
+        const M2 = finalMatT.basisZ;
+        const M3 = finalMatT.basisW;
 
-        const plane0 = new Plane(finalMatT.basisW.add(finalMatT.basisX).mul(-1) ); // 
-        const plane1 = new Plane(finalMatT.basisW.sub(finalMatT.basisX).mul(-1) ); //
-        const plane2 = new Plane(finalMatT.basisW.add(finalMatT.basisY).mul(-1) ); // 
-        const plane3 = new Plane(finalMatT.basisW.sub(finalMatT.basisY).mul(-1) ); // 
-        const plane4 = new Plane(finalMatT.basisW.add(finalMatT.basisZ).mul(-1) ); // 
-        const plane5 = new Plane(finalMatT.basisW.sub(finalMatT.basisZ).mul(-1) ); // 
+        const right  = new Plane(M0.sub(M3) );         // M0-M3
+        const left   = new Plane(M0.add(M3).mul(-1) ); // -(M0+M3)
+        const top    = new Plane(M1.sub(M3));          // M1-M3
+        const bottom = new Plane(M1.add(M3).mul(-1) ); // -(M1+M3)
+        const far    = new Plane(M2.sub(M3) );         // M2-M3
+        const near   = new Plane(M2.add(M3).mul(-1) ); // -(M2+M3)
 
-        plane0.normalize();
-        plane1.normalize();
-        plane2.normalize();
-        plane3.normalize();
-        plane4.normalize();
-        plane5.normalize();
+        this.planes = [top, bottom, left, right, near, far];
+    }
 
-        this.planes = [ plane0, plane1, plane2, plane3, plane4, plane5 ];
+    // 새로운 절두체를 할당합니다.
+    assign(finalMat) {
+        const finalMatT = finalMat.transposeNonAlloc(Frustum.#temp0);
+
+        const M0 = finalMatT.basisX;
+        const M1 = finalMatT.basisY;
+        const M2 = finalMatT.basisZ;
+        const M3 = finalMatT.basisW;
+
+        const top    = this.planes[0].planeEq;
+        const bottom = this.planes[1].planeEq;
+        const left   = this.planes[2].planeEq;
+        const right  = this.planes[3].planeEq;
+        const near   = this.planes[4].planeEq;
+        const far    = this.planes[5].planeEq;
+
+        M0.subNonAlloc(right, M3);                         // right = M0-M3
+        M0.addNonAlloc(left, M3).mulNonAlloc(left,-1);     // left = -(M0+M3)
+        M1.subNonAlloc(top, M3);                           // top = M1-M3
+        M1.addNonAlloc(bottom, M3).mulNonAlloc(bottom,-1); // bottom = -(M1+M3)
+        M2.subNonAlloc(far,M3);                            // far = M2-M3
+        M2.addNonAlloc(near,M3).mulNonAlloc(near,-1);      // near = -(M2+M3)
+
+        this.planes[0].normalize();
+        this.planes[1].normalize();
+        this.planes[2].normalize();
+        this.planes[3].normalize();
+        this.planes[4].normalize();
+        this.planes[5].normalize();
+
+        return this;
     }
 
 

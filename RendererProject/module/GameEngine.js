@@ -1,6 +1,6 @@
-import {Vector2, Vector3, Vector4, Matrix4x4} from "./MyMath.js";
+import {Vector2, Vector3, Vector4, Matrix4x4, Frustum, Bound} from "./MyMath.js";
 import * as MyMath from "./MyMath.js";
-import {Renderer, Mesh, Color, MeshType, Texture} from "./Renderer.js";
+import {Renderer, Mesh, Color, MeshType, Texture, Material} from "./Renderer.js";
 
 export const KeyCode = {
     Left  : "ArrowLeft",
@@ -74,9 +74,6 @@ export class GameEngine {
 
     // `screenPoint` 위치에 픽셀 한칸을 찍는 연산을 후면버퍼에 기록합니다.
     static setPixel(screenPoint, color=Color.black) {
-        // this.$ctx.fillStyle = color;
-        // this.$ctx.fillRect(screenPoint.x, screenPoint.y, 1, 1);
-
         const index = (screenPoint.y * this.$cvs.width * 4) + (screenPoint.x * 4);
         const data  = GameEngine.#backBuffer.data;
 
@@ -609,17 +606,19 @@ export class Transform {
         this.calculateLocal();
     }
 
+    // `worldScale` 을 얻습니다.
+    get worldScale() { return this.#worldScale.clone(); }
+
+    // `worldPosition` 을 얻습니다. 
+    get worldPosition() { return this.#worldPosition.clone(); }
+
+    // `worldRotation` 을 얻습니다.
+    get worldRotation() { return this.#worldRotation.clone(); }
+
 
     /***************
      * for optimizing
      ***************/
-
-    static #temp0 = Matrix4x4.identity; // for invTRSNonAlloc, modelNonAlloc, invWorldTRSNonAlloc, TRSNonAlloc
-    static #temp1 = Matrix4x4.identity; // for invTRSNonAlloc, modelNonAlloc, invWorldTRSNonAlloc, TRSNonAlloc
-    static #temp2 = Matrix4x4.identity; // for invTRSNonAlloc, TRSNonAlloc
-    static #temp3 = Matrix4x4.identity; // for eulerNonAlloc, 
-    static #temp4 = Matrix4x4.identity; // for eulerNonAlloc, 
-    static #temp5 = Matrix4x4.identity; // for eulerNonAlloc, 
 
     // euler() 와 같되, out 으로 결과를 출력합니다.
     static eulerNonAlloc(out, localRotation, invert=false) {
@@ -631,52 +630,47 @@ export class Transform {
         const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
         const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
 
-        const yaw   = Transform.#temp3;
-        const pitch = Transform.#temp4;
-        const roll  = Transform.#temp5;
-
-        yaw.basisX.assign(cosY, 0, -sinY, 0);
-        yaw.basisY.assign(0, 1, 0, 0);
-        yaw.basisZ.assign(sinY, 0, cosY, 0);
-        yaw.basisW.assign(0, 0, 0, 1);
-
-        pitch.basisX.assign(1, 0, 0, 0);
-        pitch.basisY.assign(0, cosX, sinX, 0);
-        pitch.basisZ.assign(0, -sinX, cosX, 0);
-        pitch.basisW.assign(0, 0, 0, 1);
-
-        roll.basisX.assign(cosZ, -sinZ, 0, 0);
-        roll.basisY.assign(sinZ, cosZ, 0, 0);
-        roll.basisZ.assign(0, 0, 1, 0);
-        roll.basisW.assign(0, 0, 0, 1);
-
         if(invert) {
-            const invYaw   = yaw.transposeNonAlloc(yaw);
-            const invPitch = pitch.transposeNonAlloc(pitch);
-            const invRoll  = roll.transposeNonAlloc(roll);
-            return invRoll.mulMatNonAlloc(out, invPitch, invYaw);
+            out.basisX.assign(((cosY)*(cosZ))+((-sinY)*((-sinX)*(sinZ))), (cosX)*(sinZ), ((sinY)*(cosZ))+((cosY)*((-sinX)*(sinZ))), 0);
+            out.basisY.assign(((cosY)*(-sinZ))+((-sinY)*((-sinX)*(cosZ))), (cosX)*(cosZ), ((sinY)*(-sinZ))+((cosY)*((-sinX)*(cosZ))), 0);
+            out.basisZ.assign((-sinY)*(cosX), sinX, (cosY)*(cosX), 0);
+            out.basisW.assign(0, 0, 0, 1);
         }
-        return yaw.mulMatNonAlloc(out, pitch, roll);
+        else {
+            out.basisX.assign(((cosZ)*(cosY))+((sinZ)*((-sinX)*(-sinY))), ((-sinZ)*(cosY))+((cosZ)*((-sinX)*(-sinY))), (cosX)*(-sinY), 0);
+            out.basisY.assign((sinZ)*(cosX), (cosZ)*(cosX), sinX, 0);
+            out.basisZ.assign(((cosZ)*(sinY))+((sinZ)*((-sinX)*(cosY))), ((-sinZ)*(sinY))+((cosZ)*((-sinX)*(cosY))), (cosX)*(cosY), 0);
+            out.basisW.assign(0, 0, 0, 1);
+        }
+        return out;
     }
 
 
     // invTRS() 와 같되, 결과를 out 으로 출력합니다.
     static invTRSNonAlloc(out, position, scale, rotation) {
-        const invS = Transform.#temp0;
-        const invR = Transform.eulerNonAlloc(Transform.#temp1, rotation, true);
-        const invT = Transform.#temp2;
+        const invSx = 1/scale.x;
+        const invSy = 1/scale.y;
+        const invSz = 1/scale.z;
 
-        invS.basisX.assign(1/scale.x, 0, 0, 0);
-        invS.basisY.assign(0, 1/scale.y, 0, 0);
-        invS.basisZ.assign(0, 0, 1/scale.z, 0);
-        invS.basisW.assign(0,0,0,1);
+        const rotX = rotation.x * MyMath.deg2rad;
+        const rotY = rotation.y * MyMath.deg2rad;
+        const rotZ = rotation.z * MyMath.deg2rad;
 
-        invT.basisX.assign(1,0,0,0);
-        invT.basisY.assign(0,1,0,0);
-        invT.basisZ.assign(0,0,1,0);
-        invT.basisW.assign(-position.x, -position.y, -position.z, 1);
+        const sinX = Math.sin(rotX), cosX = Math.cos(rotX); // x축 회전에 쓰일 Sin, Cos 값
+        const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
+        const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
 
-        return invT.mulMatNonAlloc(out, invR, invS);
+        out.basisX.assign((invSx)*(((cosY)*(cosZ))+((-sinY)*((-sinX)*(sinZ)))), (invSy)*((cosX)*(sinZ)), (invSz)*(((sinY)*(cosZ))+((cosY)*((-sinX)*(sinZ)))), 0);
+        out.basisY.assign((invSx)*(((cosY)*(-sinZ))+((-sinY)*((-sinX)*(cosZ)))), (invSy)*((cosX)*(cosZ)), (invSz)*(((sinY)*(-sinZ))+((cosY)*((-sinX)*(cosZ)))), 0);
+        out.basisZ.assign((invSx)*((-sinY)*(cosX)), (invSy)*(sinX), (invSz)*((cosY)*(cosX)), 0);
+        out.basisW.assign(
+            (invSx)*(((cosY)*(((cosZ)*(-position.x))+((-sinZ)*(-position.y))))+((-sinY)*(((-sinX)*(((sinZ)*(-position.x))+((cosZ)*(-position.y))))+((cosX)*(-position.z))))), 
+            (invSy)*(((cosX)*(((sinZ)*(-position.x))+((cosZ)*(-position.y))))+((sinX)*(-position.z))), 
+            (invSz)*(((sinY)*(((cosZ)*(-position.x))+((-sinZ)*(-position.y))))+((cosY)*(((-sinX)*(((sinZ)*(-position.x))+((cosZ)*(-position.y))))+((cosX)*(-position.z))))), 
+            1
+        );
+
+        return out;
     }
 
 
@@ -685,21 +679,16 @@ export class Transform {
         const scale    = this.#worldScale;
         const position = this.#worldPosition;
 
-        const S = Transform.#temp0;
-        const R = this.#worldRotation;
-        const T = Transform.#temp1;
+        const RX = this.#worldRotation.basisX;
+        const RY = this.#worldRotation.basisY;
+        const RZ = this.#worldRotation.basisZ;
+        const RW = this.#worldRotation.basisW;
 
-        S.basisX.assign(scale.x, 0, 0, 0);
-        S.basisY.assign(0, scale.y, 0, 0);
-        S.basisZ.assign(0, 0, scale.z, 0);
-        S.basisW.assign(0, 0, 0, 1);
-
-        T.basisX.assign(1,0,0,0);
-        T.basisY.assign(0,1,0,0);
-        T.basisZ.assign(0,0,1,0);
-        T.basisW.assign(position.x, position.y, position.z, 1);
-
-        return S.mulMatNonAlloc(out, R, T);
+        out.basisX.assign(((RX.x)*(scale.x))+((position.x)*((RX.w)*(scale.x))), ((RX.y)*(scale.x))+((position.y)*((RX.w)*(scale.x))), ((RX.z)*(scale.x))+((position.z)*((RX.w)*(scale.x))), (RX.w)*(scale.x));
+        out.basisY.assign(((RY.x)*(scale.y))+((position.x)*((RY.w)*(scale.y))), ((RY.y)*(scale.y))+((position.y)*((RY.w)*(scale.y))), ((RY.z)*(scale.y))+((position.z)*((RY.w)*(scale.y))), (RY.w)*(scale.y));
+        out.basisZ.assign(((RZ.x)*(scale.z))+((position.x)*((RZ.w)*(scale.z))), ((RZ.y)*(scale.z))+((position.y)*((RZ.w)*(scale.z))), ((RZ.z)*(scale.z))+((position.z)*((RZ.w)*(scale.z))), (RZ.w)*(scale.z));
+        out.basisW.assign((RW.x)+((position.x)*(RW.w)), (RW.y)+((position.y)*(RW.w)), (RW.z)+((position.z)*(RW.w)), RW.w);
+        return out;
     }
 
 
@@ -708,21 +697,26 @@ export class Transform {
         const scale    = this.#worldScale;
         const position = this.#worldPosition;
 
-        const S = Transform.#temp0;
-        const R = this.#invWorldRotation;
-        const T = Transform.#temp1;
+        const invSx = 1/scale.x;
+        const invSy = 1/scale.y;
+        const invSz = 1/scale.z;
 
-        S.basisX.assign(1/scale.x, 0, 0, 0);
-        S.basisY.assign(0, 1/scale.y, 0, 0);
-        S.basisZ.assign(0, 0, 1/scale.z, 0);
-        S.basisW.assign(0, 0, 0, 1);
+        const RX = this.#invWorldRotation.basisX;
+        const RY = this.#invWorldRotation.basisY;
+        const RZ = this.#invWorldRotation.basisZ;
+        const RW = this.#invWorldRotation.basisW;
 
-        T.basisX.assign(1, 0, 0, 0);
-        T.basisY.assign(0, 1, 0, 0);
-        T.basisZ.assign(0, 0, 1, 0);
-        T.basisW.assign(-position.x, -position.y, -position.z, 1);
+        out.basisX.assign(invSx*RX.x, invSy*RX.y, invSz*RX.z, RX.w);
+        out.basisY.assign(invSx*RY.x, invSy*RY.y, invSz*RY.z, RY.w);
+        out.basisZ.assign(invSx*RZ.x, invSy*RZ.y, invSz*RZ.z, RZ.w);
 
-        return T.mulMatNonAlloc(out, R,S);
+        out.basisW.assign(
+            (invSx)*(((((RX.x)*(-position.x))+((RY.x)*(-position.y)))+((RZ.x)*(-position.z)))+(RW.x)), 
+            (invSy)*(((((RX.y)*(-position.x))+((RY.y)*(-position.y)))+((RZ.y)*(-position.z)))+(RW.y)), 
+            (invSz)*(((((RX.z)*(-position.x))+((RY.z)*(-position.y)))+((RZ.z)*(-position.z)))+(RW.z)), 
+            ((((RX.w)*(-position.x))+((RY.w)*(-position.y)))+((RZ.w)*(-position.z)))+(RW.w)
+        );
+        return out;
     }
 
 
@@ -748,21 +742,20 @@ export class Transform {
 
     // TRS() 와 같되, 결과를 out 에 저장합니다.
     static TRSNonAlloc(out, position, scale, rotation) {
-        const S = Transform.#temp0;
-        const R = Transform.eulerNonAlloc(Transform.#temp1, rotation);
-        const T = Transform.#temp2;
+        const rotX = rotation.x * MyMath.deg2rad;
+        const rotY = rotation.y * MyMath.deg2rad;
+        const rotZ = rotation.z * MyMath.deg2rad;
 
-        S.basisX.assign(scale.x, 0, 0, 0);
-        S.basisY.assign(0, scale.y, 0, 0);
-        S.basisZ.assign(0, 0, scale.z, 0);
-        S.basisW.assign(0, 0, 0, 1);
+        const sinX = Math.sin(rotX), cosX = Math.cos(rotX); // x축 회전에 쓰일 Sin, Cos 값
+        const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
+        const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
 
-        T.basisX.assign(1,0,0,0);
-        T.basisY.assign(0,1,0,0);
-        T.basisZ.assign(0,0,1,0);
-        T.basisW.assign(position.x, position.y, position.z, 1);
+        out.basisX.assign((cosZ*cosY*scale.x)+(sinZ*-sinX*-sinY*scale.x), ((-sinZ)*((cosY)*(scale.x)))+((cosZ)*((-sinX)*((-sinY)*(scale.x)))), cosX*-sinY*scale.x, 0);
+        out.basisY.assign((sinZ)*((cosX)*(scale.y)), (cosZ)*((cosX)*(scale.y)), (sinX)*(scale.y), 0);
+        out.basisZ.assign(((cosZ)*((sinY)*(scale.z)))+((sinZ)*((-sinX)*((cosY)*(scale.z)))), ((-sinZ)*((sinY)*(scale.z)))+((cosZ)*((-sinX)*((cosY)*(scale.z)))), (cosX)*((cosY)*(scale.z)), 0);
+        out.basisW.assign(position.x, position.y, position.z, 1);
 
-        return S.mulMatNonAlloc(out, R, T);
+        return out;
     }
 };
 
@@ -890,6 +883,7 @@ export class Camera {
 
 export class GameObject {
    static #instances = [];
+   static #frustum   = new Frustum();
 
    static #temp0 = Matrix4x4.identity;
    static #temp1 = Matrix4x4.identity;
@@ -909,7 +903,6 @@ export class GameObject {
        if(gameObject!=null) {
           newInst.transform = gameObject.transform.clone();
           newInst.renderer.mesh = gameObject.renderer.mesh;
-          newInst.renderer.mainTexture = gameObject.renderer.mainTexture;
        }
        else {
           newInst.transform = new Transform();
@@ -961,14 +954,15 @@ export class GameObject {
             const perspective = camera.perspectiveNonAlloc(GameObject.#temp2);
             const finalMat    = model.mulMatNonAlloc(model, view, perspective);
 
-            const frustum  = new MyMath.Frustum(finalMat);
+            const frustum  = GameObject.#frustum.assign(finalMat);
             const mesh     = gameObject.renderer.mesh;
             const collider = mesh.collider;
 
-            // 절두체 컬링. view 행렬을 적용한 위치를 대상으로 진행
-            if(this.useFrustumCulling && collider!=null && collider.checkBoundFrustum(frustum)==MyMath.Bound.Outside) {
+            // 절두체 컬링. 
+            if(gameObject.useFrustumCulling && collider!=null && collider.checkBoundFrustum(frustum)==MyMath.Bound.Outside) {
                 continue;
             }
+            
             gameObject.renderer.drawMesh(finalMat);
 
             // 매시의 콜라이더가 존재하고, 콜라이더 표시를 해야 하는 경우.
@@ -1337,14 +1331,14 @@ export class BoxCollider {
         let intersectCount = 0;
         
         for(const plane of frustum.planes) {
-            const p    = this.max.clone();
+            const p    = this.max.clone(); 
             const pNeg = this.min.clone();
 
             if(plane.normal.x > 0) { p.x = this.min.x; pNeg.x = this.max.x; }
             if(plane.normal.y > 0) { p.y = this.min.y; pNeg.y = this.max.y; } 
             if(plane.normal.z > 0) { p.z = this.min.z; pNeg.z = this.max.y; }
 
-            if(plane.distance(p) > 0) {
+            if(plane.isOutside(p)) {
                 return MyMath.Bound.Outside;
             }
             if(plane.distance(pNeg) >= 0) {
@@ -1363,8 +1357,9 @@ export class BoxCollider {
 export class Bone {
     static renderer = null;
 
-    static #temp0 = Matrix4x4.identity;
-    static #temp1 = Matrix4x4.identity;
+    static #temp0   = Matrix4x4.identity;
+    static #temp1   = Matrix4x4.identity;
+    static #frustum = new Frustum();
 
     bindPose       = null;  // 본의 최초 트랜스폼.
     $transform     = null;  // 본의 트랜스폼.
@@ -1389,14 +1384,15 @@ export class Bone {
 
         // 본을 표시하기 위한, 메시를 생성합니다. 최초 한번만 생성합니다.
         if(Bone.renderer==null) {
-            const renderer = Bone.renderer      = new Renderer();
-            const mesh     = Bone.renderer.mesh = new Mesh();
+            const renderer = Bone.renderer          = new Renderer();
+            const mesh     = Bone.renderer.mesh     = new Mesh();
+            const mat      = Bone.renderer.material = new Material();
 
             const bigCircle   = [];
             const smallCircle = [];
 
             mesh.vertices = [];
-            mesh.uvs      = [Vector3.zero];
+            mesh.uvs      = [Vector2.zero];
             mesh.indices  = [];
 
 
@@ -1458,14 +1454,14 @@ export class Bone {
 
             
             // 화살표는 빨간색으로 출력
-            mesh.collider = new BoxCollider(mesh);
-            renderer.fragmentShader = (uv,pos)=>{ return new Color(255, 0, 0, 1); };
+            mesh.collider           = new BoxCollider(mesh);
+            mat.triangleCount       = mesh.triangleCount;
             renderer.wireFrameMode  = true;
         }
     }
 
     // 본의 스켈레탈 애니메이션을 적용하는 행렬을 돌려줍니다. 스켈레탈 애니메이션을 적용하기 위해,
-    // bindPose^(-1) 을 적용하여 로컬 공간으로 이동시킵니다. 이후, parent.worldTransform * this.localTransform
+    // bindPose^(-1) 을 적용하여 로컬 공간으로 이동시킵니다. 이후, parent.worldTRS * this.localTRS
     // 을 적용하는 순서를 가집니다. skeletal() 함수는 한번 생성한 결과를 캐싱하며, 트랜스폼이 변경되었을 경우
     // 재생성합니다.
     skeletal() {
@@ -1520,6 +1516,12 @@ export class Bone {
                 this.$bindPoseDirty = false;
             }
             finalMat = this.#drawBoneCache.mulMatNonAlloc(Bone.#temp0, finalMat);
+
+            const frustum = Bone.#frustum.assign(finalMat);
+
+            if(Bone.renderer.mesh.collider.checkBoundFrustum(frustum) == Bound.Outside) {
+                return;
+            }
 
             Bone.renderer.wireFrameColor = this.boneColor;
             Bone.renderer.drawMesh(finalMat);
@@ -1596,5 +1598,9 @@ export class Bone {
     set position(newPosition) {
         this.#setDirty();
         this.$transform.position = newPosition;
+    }
+
+    setBindPose() {
+        
     }
 };

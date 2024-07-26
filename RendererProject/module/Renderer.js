@@ -114,20 +114,8 @@ export class Material {
 
 export class Renderer {
     static #triangleList  = new Array(100);
+    static #pointList     = new Array(3);
     static #instanceCount = 0;
-
-    camera       = Camera.mainCamera; 
-    mainTexture  = null;
-    mesh         = null;
-
-    wireFrameColor  = Color.black; // 와이어 프레임의 선 색깔
-    wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
-    backfaceCulling = true;        // 백페이스 컬링 적용 여부
-
-    #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVectorNonAlloc(vertex,vertex); }; // 디폴트 정점 셰이더
-    #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };                           // 디폴트 픽셀 셰이더
-
-    materials = null; // SubMesh 들을 위해 사용합니다. 
 
     static #temp0 = new Vector4(); // Vector4 타입의 임시변수.
     static #temp1 = new Vector4(); // Vector4 타입의 임시변수.
@@ -138,6 +126,17 @@ export class Renderer {
     static #temp6 = new Vector2(); // Vector2 타입의 임시변수.
     static #temp7 = new Vector3(); // Vector3 타입의 임시변수.
 
+    camera = Camera.mainCamera; 
+    mesh   = null;
+
+    wireFrameColor  = Color.black; // 와이어 프레임의 선 색깔
+    wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
+    backfaceCulling = true;        // 백페이스 컬링 적용 여부
+
+    #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVectorNonAlloc(vertex,vertex); }; // 디폴트 정점 셰이더
+    #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };                           // 디폴트 픽셀 셰이더
+
+    materials = null; // SubMesh 들을 위해 사용합니다. 
 
     static #testFunc = [
 
@@ -212,7 +211,13 @@ export class Renderer {
         function clipFar(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
-            const s    = (pos1.w-pos1.z) / (pos0.z-pos1.z-pos0.w+pos1.w);
+
+            const z0 = pos0.z;
+            const z1 = pos1.z;
+            const w0 = pos0.w;
+            const w1 = pos1.w;
+
+            const s = (z1 - w1) / (w0 - w1 - z0 + z1);
             
             const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
             const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
@@ -236,7 +241,7 @@ export class Renderer {
             const x0 = pos0.x;
             const x1 = pos1.x;
 
-            const s = (-w1-x1) / (x0-x1+w0-w1);
+            const s = (-w1 - x1) / (x0 - x1 + w0 - w1);
 
             const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
             const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
@@ -254,7 +259,13 @@ export class Renderer {
         function clipRight(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
-            const s    = (pos1.w-pos1.x) / (pos0.x-pos1.x-pos0.w+pos1.w);
+
+            const x0 = pos0.x;
+            const x1 = pos1.x;
+            const w0 = pos0.w;
+            const w1 = pos1.w;
+
+            const s = (x1 - w1) / (w0 - w1 - x0 + x1);
 
             const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
             const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
@@ -272,7 +283,13 @@ export class Renderer {
         function clipTop(p0, p1, result) {
             const pos0 = p0.position;
             const pos1 = p1.position;
-            const s    = (pos1.w-pos1.y) / (pos0.y-pos1.y-pos0.w+pos1.w);
+
+            const y0 = pos0.y;
+            const y1 = pos1.y;
+            const w0 = pos0.w;
+            const w1 = pos1.w;
+
+            const s = (y1 - w1) / (w0 - w1 - y0 + y1);
 
             const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
             const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
@@ -296,7 +313,7 @@ export class Renderer {
             const y0 = pos0.y;
             const y1 = pos1.y;
 
-            const s = (-w1-y1) / (y0-y1+w0-w1);
+            const s = (y1 + w1) / (-w0 + w1 - y0 + y1);
 
             const temp0 = p0.uv.mulNonAlloc(Renderer.#temp2, s);         // p0.uv * s
             const temp1 = p1.uv.mulNonAlloc(Renderer.#temp3, 1-s);       // p1.uv * (1-s)
@@ -335,7 +352,6 @@ export class Renderer {
 
         to.x = MyMath.clamp(to.x, 0, this.camera.screenSize.x);
         to.y = MyMath.clamp(to.y, 0, this.camera.screenSize.y);
-
 
         const w  = Math.abs(to.x - from.x);
         const h  = Math.abs(to.y - from.y);
@@ -455,9 +471,12 @@ export class Renderer {
 
     // 본의 가중치를 적용합니다.
     applySkeletal(original) {
+        Renderer.#pointList[0] = original.p0;
+        Renderer.#pointList[1] = original.p1;
+        Renderer.#pointList[2] = original.p2;
 
-        for(const p of [original.p0, original.p1, original.p2]) { // 세 정점들에 대해서 진행한다. 
-            if(p.weight == null) continue;                        // 가중치가 존재하지 않으면, 스킵
+        for(const p of Renderer.#pointList) { // 세 정점들에 대해서 진행한다. 
+            if(p.weight == null) continue;    // 가중치가 존재하지 않으면, 스킵
 
             const boneNames = p.weight.bones;     // 이름들의 목록
             const weights   = p.weight.weights;   // 가중치들의 목록
@@ -574,6 +593,8 @@ export class Renderer {
                         triangle.p0 = p0;
                         triangle.p1 = p1;
                         triangle.p2 = p02Clip;
+
+                        j++; // newTriangle 이 무한히 평가되는 버그 수정..
                     }
                 }
             }

@@ -1,10 +1,16 @@
-import {Vector2, Vector3, Vector4, Matrix4x4} from "./MyMath.js";
+import {Vector2, Vector3, Vector4, Matrix4x4, Quaternion} from "./MyMath.js";
 import * as MyMath from "./MyMath.js";
 import {GameEngine, Transform, Camera} from "./GameEngine.js";
 
 export const MeshType = {
     Normal  : 0,
     Skinned : 1
+};
+
+export const WeightType = {
+    Linear         : 0,
+    Blend          : 1,
+    DualQuaternion : 2
 };
 
 export class Color {
@@ -137,6 +143,7 @@ export class Renderer {
     #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };                           // 디폴트 픽셀 셰이더
 
     materials = null; // SubMesh 들을 위해 사용합니다. 
+
 
     static #testFunc = [
 
@@ -527,7 +534,7 @@ export class Renderer {
         for(let i=0; i<triangleCount; ++i) {
             const original = this.mesh.setTriangle(this.#getTriangle(0), i);
             let   listSize = 1;
-            
+
             if(this.mesh.type==MeshType.Skinned) { // 스켈레탈 애니메이션. 본을 가지고 있다면,
                 this.applySkeletal(original);      // 본의 가중치를 적용한다.
             }
@@ -539,9 +546,8 @@ export class Renderer {
 
 
             // `original` 삼각형이 절두체에 꼭 맞을 때까지 쪼갠다.
-            // 총 7개의 평면에 대해서 수행한다: near, far, top, bottom, left, right
+            // 총 6개의 평면에 대해서 수행한다: near, far, left, right, top, bottom
             for(let i=0; i<6; ++i) {
-
                 for(let j=0; j<listSize; ++j) {
                     const triangle = Renderer.#triangleList[j];
                     let   p0       = triangle.p0;
@@ -555,8 +561,8 @@ export class Renderer {
 
                     // 세 점이 모두 평면의 바깥에 위치한다면, 그리기에서 제외한다.
                     if(count==3) {
-                        Renderer.#triangleList[j--]      = Renderer.#triangleList[--listSize];
-                        Renderer.#triangleList[listSize] = triangle;
+                        Renderer.#triangleList[j--]      = Renderer.#triangleList[--listSize]; // swap(triangle j, triangle listSize-1)
+                        Renderer.#triangleList[listSize] = triangle;                           // 폐기된 triangle 은 이후 이후 재사용된다.
                     }
 
                     // 두 점만 평면의 바깥에 위치한 경우, 삼각형의 일부를 잘라준다.
@@ -579,8 +585,12 @@ export class Renderer {
                         if     (result0==1) { p0=triangle.p1; p1=triangle.p2; p2=triangle.p0; }
                         else if(result1==1) { p0=triangle.p2; p1=triangle.p0; p2=triangle.p1; }
 
-                        const newTriangle = this.#getTriangle(listSize++); // p0-p1-p12Clip
-
+                        const newTriangle = this.#getTriangle(listSize); // 새로운 삼각형 p0-p1-p12Clip 할당.
+                        
+                        
+                        Renderer.#triangleList[listSize++] = Renderer.#triangleList[j+1]; // swap(triangle j+1, triangle listSize)
+                        Renderer.#triangleList[j+1]        = newTriangle;                 // triangleList[j] = triangle, triangleList[j+1] = newTriangle 을 보장하기 위함.
+                        
                         newTriangle.p0.position.assignVector(p0.position); newTriangle.p0.uv.assignVector(p0.uv); // p0 의 내용을 복사
                         newTriangle.p1.position.assignVector(p1.position); newTriangle.p1.uv.assignVector(p1.uv); // p1 의 내용을 복사
                         
@@ -594,7 +604,7 @@ export class Renderer {
                         triangle.p1 = p1;
                         triangle.p2 = p02Clip;
 
-                        j++; // newTriangle 이 무한히 평가되는 버그 수정..
+                        j++; // newTriangle 는 이미 클리핑이 적용되었으므로 건너뛴다.
                     }
                 }
             }
@@ -609,9 +619,6 @@ export class Renderer {
                 else {
                     this.drawTriangle(t, this.#fragmentShader);
                 }
-                Renderer.#triangleList[i].p0.weight = null; // for optimizing GC
-                Renderer.#triangleList[i].p1.weight = null; // for optimizing GC
-                Renderer.#triangleList[i].p2.weight = null; // for optimizing GC
             }
 
             // 서브 메시를 사용하고, 현재 머터리얼이 정해진 수의 삼각형에게 영향을 주었다면,
@@ -644,12 +651,12 @@ export class Renderer {
 
             const triangleNorm = Vector3.crossNonAlloc(
                 Renderer.#temp7,
-                triangle.p0.position.subNonAlloc(Renderer.#temp0, triangle.p2.position),
-                triangle.p1.position.subNonAlloc(Renderer.#temp1, triangle.p2.position)
-            );
+                triangle.p0.position.subNonAlloc(Renderer.#temp0, triangle.p2.position), // p0 - p2
+                triangle.p1.position.subNonAlloc(Renderer.#temp1, triangle.p2.position)  // p1 - p2
+            );                                                                           // triangleNorm = (p0-p2) x (p1-p2)
             const forward = Renderer.#temp0.assign(0,0,1,0); 
 
-            if(Vector3.dot(triangleNorm, forward) >= 0) {
+            if(Vector3.dot(triangleNorm, forward) >= 0) { // |triangleNorm||forward|cos >= 0
                 return;
             }
         }
@@ -668,8 +675,8 @@ export class Renderer {
         const p1 = this.#worldToScreen(Renderer.#temp3, triangle.p1.position);
         const p2 = this.#worldToScreen(Renderer.#temp4, triangle.p2.position); // #temp4 must be preserved
         
-        const u = p0.subNonAlloc(Renderer.#temp5, p2); // #temp5 must be preserved
-        const v = p1.subNonAlloc(Renderer.#temp6, p2); // #temp6 must be preserved
+        const u = p0.subNonAlloc(Renderer.#temp5, p2); // u = p0-p2. #temp5 must be preserved
+        const v = p1.subNonAlloc(Renderer.#temp6, p2); // v = p1-p2. #temp6 must be preserved
 
         const uu  = Vector2.dot(u,u);
         const vv  = Vector2.dot(v,v);
@@ -862,14 +869,17 @@ export class Texture {
 
 
 export class Weight {
-    bones     = null; // 연결된 본들의 목록
-    weights   = null; // 본들에게 받는 영향력
+    bones   = null; // 연결된 본들의 목록
+    weights = null; // 본들에게 받는 영향력
+
+    weightType; // SkinningType (WeightType)
 
     // `bones` 는 정점에게 영향을 미치는 본들의 목록
     // `weight` 는 각 본들이 주는 가중치 값들의 목록
-    constructor(bones, weights) {
-        this.bones   = bones;
-        this.weights = weights;
+    constructor(bones, weights, weightType = WeightType.Linear) {
+        this.bones      = bones;
+        this.weights    = weights;
+        this.weightType = weightType;
     }
 
     // 본의 갯수를 얻습니다.

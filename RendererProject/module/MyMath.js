@@ -1,7 +1,7 @@
-
-export const deg2rad = Math.PI / 180;
-export const rad2deg = 180 / Math.PI;
-export const twoPI   = Math.PI * 2;
+export const deg2rad    = Math.PI / 180;
+export const rad2deg    = 180 / Math.PI;
+export const deg2rad1_2 = deg2rad * 0.5;
+export const twoPI      = Math.PI * 2;
 
 export const Bound = {
    Outside   : 0,
@@ -275,14 +275,24 @@ export class Vector3 {
    // 두 벡터들의 내적(dot product)의 결과를 돌려줍니다.
    static dot(u, v) { return (u.x * v.x) + (u.y * v.y) + (u.z * v.z); }
 
-   // 두 벡터들의 외적(cross product)의 결과를 돌려줍니다.
+   // 두 벡터들의 외적(cross product)의 결과를 돌려줍니다. 
    static cross(u,v) { 
-      return new Vector3(
-         u.y*v.z - u.z*v.y,
-         u.z*v.x - u.x*v.z,
-         u.x*v.y - u.y*v.x
-      );
+        return new Vector3(
+           u.y*v.z - u.z*v.y,
+           u.z*v.x - u.x*v.z,
+           u.x*v.y - u.y*v.x
+        );
    }
+
+
+   // 두 벡터들의 사이각을 돌려줍니다. 인자로 받을 u, v 는 항상
+   // 정규화되어 있어야 합니다.
+   static angle(u,v) {
+       const dot   = clamp(Vector3.dot(u,v), -1, 1); // |u||v|cos (assume |u| == |v| == 1)
+       const angle = Math.acos(dot) * rad2deg;
+       return angle;
+   }
+
 
    static get zero() { return new Vector3(0,0,0); }
    static get one()  { return new Vector3(1,1,1); }
@@ -1266,5 +1276,247 @@ export class Frustum {
             }
         }
         return Bound.Inside;
+    }
+};
+
+
+export class Quaternion {
+    w; v; // scalar, vector3
+
+
+    // (x,y,z) 오일러각으로부터 사원수를 생성합니다. 오일러각은 degree 로 나타냅니다.
+    static euler(rotation) {
+        const x = rotation.x * deg2rad1_2;
+        const y = rotation.y * deg2rad1_2;
+        const z = rotation.z * deg2rad1_2;
+
+        const sinX = Math.sin(x), cosX = Math.cos(x);
+        const sinY = Math.sin(y), cosY = Math.cos(y);
+        const sinZ = Math.sin(z), cosZ = Math.cos(z);
+
+        const yaw   = new Quaternion(cosY, Vector3.up.mul(sinY) );
+        const pitch = new Quaternion(cosX, Vector3.right.mul(sinX) );
+        const roll  = new Quaternion(cosZ, Vector3.back.mul(sinZ) );
+
+        return yaw.mulQuat(pitch, roll);
+    }
+
+
+    // 인자로 주어진 벡터 v 를 회전축 axis 가 만드는 평면에서 angle 만큼
+    // 회전시킨 결과를 돌려줍니다. out != null 이라면, out 에 결과를 돌려줍니다.
+    static rotateVector(axis, angle, v, out=null) {
+        const angle1_2 = angle * deg2rad1_2;
+        const sin      = Math.sin(angle1_2);
+        const cos      = Math.cos(angle1_2);
+        const q        = Quaternion.#temp0.assign(cos, sin*axis.x, sin*axis.y, sin*axis.z);
+        
+        if(out == null) {
+            return q.mulVector(v);
+        }
+        else {
+            return q.mulVectorNonAlloc(out, v);
+        }
+    }
+
+
+    // 인자로 주어진 회전축 axis 가 만드는 평면에서 angle 만큼
+    // 회전시키는 행렬을 돌려줍니다. Transform.rodrigues() 함수와
+    // 결과는 같으며, out != null 이라면, out 에 결과를 돌려줍니다.
+    static rotationMatrix(axis, angle, out=null) {
+        const angle1_2 = angle * deg2rad1_2;
+        const sin      = Math.sin(angle1_2);
+        const cos      = Math.cos(angle1_2);
+        const q        = Quaternion.#temp0.assign(cos, sin*axis.x, sin*axis.y, sin*axis.z);
+
+        if(out == null) {
+            return q.toMatrix4x4();
+        }
+        else {
+            return q.toMatrix4x4NonAlloc(out);
+        }
+    }
+
+
+    // 허수부를 w, 벡터부를 v 를 갖는 사원수를 생성합니다. 
+    // 인자로 받은 v 는 clone() 를 사용하여 복사됩니다.
+    // 기본값은 cos(0) + sin(0) * (0,1,0) 입니다.
+    constructor(w=1,v=Vector3.zero) {
+        this.w = w;
+        this.v = v.clone();
+    }
+
+
+    // 이 사원수의 복사본을 만들어 돌려줍니다.
+    clone() { return new Quaternion(this.w, this.v); }
+
+
+    // 이 사원수를 나타내는 문자열을 돌려줍니다.
+    toString() { return `(${this.w}, ${this.v})`; }
+
+
+    // 사원수를 회전 행렬로 변환합니다.
+    toMatrix4x4() {
+
+        return new Matrix4x4(
+            this.mulVector(Vector3.right).toVector4(0),
+            this.mulVector(Vector3.up).toVector4(0),
+            this.mulVector(Vector3.forward).toVector4(0),
+            new Vector4(0, 0, 0, 1)
+        );
+    }
+
+
+    // 사원수끼리 곱셈을 수행합니다. 사원수의 곱셈 또한 행렬처럼 결합법칙을 
+    // 만족하므로, 결과적으로 추후에 mulVector(v) 를 수행할 때 각 사원수의
+    // 회전을 순서대로 적용하는 꼴이 됩니다.
+    mulQuat(...args) {
+        let ret = this.clone();
+        
+        // q1 * q2 = (w1w2 - v1v2, (v1 x v2) + w1v2 + w2v1)
+        for(const q of args) {
+            const w1w2  = q.w * ret.w;               // w1 * w2 (scalar)
+            const v1v2  = Vector3.dot(q.v, ret.v);   // v1 * v2 (scalar)
+            const w1v2  = ret.v.mul(q.w);            // w1 * v2 (vector)
+            const w2v1  = q.v.mul(ret.w);            // w2 * v1 (vector)
+            const v1xv2 = Vector3.cross(q.v, ret.v); // v1 x v2 (vector)
+
+            ret.w = w1w2 - v1v2;
+            ret.v = w1v2.add(w2v1, v1xv2);
+        }
+        return ret;
+    }
+
+
+    // 사원수와 벡터의 곱셈을 수행합니다. 벡터 v 는 (0,v) 라는 순허수 사원수로 취급하며,
+    // 로드리게스 공식을 사용하여 v` = q * (0,v) * q* 를 수행합니다.
+    mulVector(v) {
+        const t   = Vector3.cross(this.v, v).mul(2); // 2 * (r x v)
+        const rxt = Vector3.cross(this.v, t);        // r x t
+        const wt  = t.mul(this.w);                   // w * t
+        const ret = v.add(wt, rxt);
+
+        return ret;
+    }
+
+    // 사원수의 크기의 제곱 |q|^2 을 돌려줍니다.
+    get sqrMagnitude() { return this.v.sqrMagnitude + this.w*this.w; }
+
+
+    // 사원수의 크기 |q| 를 돌려줍니다.
+    get magnitude() { return Math.sqrt(this.sqrMagnitude); }
+
+
+    // 켤레 사원수 q* 를 돌려줍니다.
+    get conjugate() { return new Quaternion(this.w, this.v.mul(-1)); }
+
+
+    /******************
+     * for optimzing
+     ******************/
+
+    static #temp0 = new Quaternion(); // Quaternion
+    static #temp1 = new Quaternion(); // Quaternion
+    static #temp2 = new Quaternion(); // Quaternion
+    static #temp3 = new Vector3();    // Vector3
+    static #temp4 = new Vector3();    // Vector3
+    static #temp5 = new Vector3();    // Vector3
+    static #temp6 = new Vector3();    // Vector3
+    static #temp7 = new Vector3();    // Vector3
+    static #temp8 = new Vector3();    // Vector3
+
+
+    // 이 사원수를 a + (b,c,d) 로 초기화합니다.
+    assign(a,b,c,d) {
+        this.w = a;
+        this.v.assign(b,c,d);
+        return this;
+    }
+
+
+    // 이 사원수의 성분들을 q 의 성분들로 초기화합니다.
+    assignQuat(q) {
+        this.w = q.w;
+        this.v.assignVector(q.v);
+        return this;
+    }
+
+
+    // mulQuat() 과 같되, 결과를 out 에 저장합니다. out 은 ...args 와
+    // 같을 수 없습니다. 대신 this == out 인 것은 허용합니다.
+    mulQuatNonAlloc(out, ...args) {
+        const ret   = out.assignQuat(this);
+        const temp0 = Quaternion.#temp3;
+        const temp1 = Quaternion.#temp4;
+        const temp2 = Quaternion.#temp5;
+
+        // q1 * q2 = (w1w2 - v1v2, (v1 x v2) + w1v2 + w2v1)
+        for(const q of args) {
+            const w1w2  = q.w * ret.w;                              // w1 * w2 (scalar)
+            const v1v2  = Vector3.dot(q.v, ret.v);                  // v1 * v2 (scalar)
+            const w1v2  = ret.v.mulNonAlloc(temp0, q.w);            // w1 * v2 (vector)
+            const w2v1  = q.v.mulNonAlloc(temp1, ret.w);            // w2 * v1 (vector)
+            const v1xv2 = Vector3.crossNonAlloc(temp2, q.v, ret.v); // v1 x v2 (vector)
+
+            ret.w = w1w2 - v1v2;
+            w1v2.addNonAlloc(ret.v, w2v1, v1xv2);
+        }
+        return ret;
+    }
+
+
+    // mulVector() 와 같되, 결과를 out 에 저장합니다. 해당 함수는
+    // out == v 임을 허용합니다.
+    mulVectorNonAlloc(out, v) {
+        const rxv = Vector3.crossNonAlloc(Quaternion.#temp3, this.v, v); // (r x v)
+        const t   = rxv.mulNonAlloc(rxv, 2);                             // 2 * (r x v)
+        const rxt = Vector3.crossNonAlloc(Quaternion.#temp5, this.v, t); // r x t
+        const wt  = t.mulNonAlloc(Quaternion.#temp4, this.w);            // w * t
+
+        const ret = v.addNonAlloc(out, wt, rxt); // v + wt + r x t
+
+        return ret;
+    }
+
+
+    // toMatrix4x4() 와 같되, 결과를 out 에 저장합니다.
+    toMatrix4x4NonAlloc(out) {
+        const right   = Quaternion.#temp6.assign(1, 0, 0);
+        const up      = Quaternion.#temp7.assign(0, 1, 0);
+        const forward = Quaternion.#temp8.assign(0, 0, 1);
+
+        this.mulVectorNonAlloc(right, right);
+        this.mulVectorNonAlloc(up, up);
+        this.mulVectorNonAlloc(forward, forward);
+
+        out.basisX.assign(right.x, right.y, right.z, 0);
+        out.basisY.assign(up.x, up.y, up.z, 0);
+        out.basisZ.assign(forward.x, forward.y, forward.z, 0);
+        out.basisW.assign(0,0,0,1);
+
+        return out;
+    }
+
+
+    // conjugate 와 같되, 결과를 out 에 저장합니다.
+    conjugateNonAlloc(out) {
+       return out.assign(this.w, -this.v.x, -this.v.y, -this.v.z);
+    }
+
+
+    // euler() 와 같되, 결과를 out 에 저장합니다.
+    static eulerNonAlloc(out, rotation) {
+        const x = deg2rad1_2 * rotation.x;
+        const y = deg2rad1_2 * rotation.y;
+        const z = deg2rad1_2 * rotation.z;
+
+        const sinX = Math.sin(x), cosX = Math.cos(x);
+        const sinY = Math.sin(y), cosY = Math.cos(y);
+        const sinZ = Math.sin(z), cosZ = Math.cos(z);
+
+        const yaw   = Quaternion.#temp0.assign(cosY, 0, sinY, 0);  // yaw   = cosY + sinY * (0,1,0)
+        const pitch = Quaternion.#temp1.assign(cosX, sinX, 0, 0);  // pitch = cosX + sinX * (1,0,0)
+        const roll  = Quaternion.#temp2.assign(cosZ, 0, 0, -sinZ); // roll  = cosZ + sinZ * (0,0,-1) 
+
+        return yaw.mulQuatNonAlloc(out, pitch, roll); // out = roll * pitch * yaw 
     }
 };

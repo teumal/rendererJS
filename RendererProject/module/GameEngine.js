@@ -1,4 +1,4 @@
-import {Vector2, Vector3, Vector4, Matrix4x4, Frustum, Bound} from "./MyMath.js";
+import {Vector2, Vector3, Vector4, Matrix4x4, Frustum, Bound, Quaternion} from "./MyMath.js";
 import * as MyMath from "./MyMath.js";
 import {Renderer, Mesh, Color, MeshType, Texture, Material} from "./Renderer.js";
 
@@ -74,7 +74,10 @@ export class GameEngine {
 
     // `screenPoint` 위치에 픽셀 한칸을 찍는 연산을 후면버퍼에 기록합니다.
     static setPixel(screenPoint, color=Color.black) {
-        const index = (screenPoint.y * this.$cvs.width * 4) + (screenPoint.x * 4);
+        // GameEngine.$ctx.fillStyle = color.toString();
+        // GameEngine.$ctx.fillRect(screenPoint.x, screenPoint.y, 1,1);
+
+        const index = (screenPoint.y * GameEngine.$cvs.width * 4) + (screenPoint.x * 4);
         const data  = GameEngine.#backBuffer.data;
 
         data[index]   = color.r * 255;
@@ -221,16 +224,20 @@ export class GameEngine {
 
 
 export class Transform {
-    #localPosition;    // Vector3
-    #localScale;       // Vector3
-    #localRotation;    // Matrix4x4
-    #invLocalRotation; // Matrix4x4
+    static #temp0 = new Quaternion(); // Quaternion
+    static #temp1 = new Vector3();    // Vector3
+    static #temp2 = new Matrix4x4();  // Matrix4x4
+    static #temp3 = new Matrix4x4();  // Matrix4x4
+    static #temp4 = new Matrix4x4();  // Matrix4x4
 
-    #worldPosition;    // Vector3
-    #worldScale;       // Vector3
-    #worldRotation;    // Matrix4x4
-    #invWorldRotation; // Matrix4x4
-
+    #localPosition; // Vector3
+    #localScale;    // Vector3
+    #localRotation; // Quaternion
+    
+    #worldPosition; // Vector3
+    #worldScale;    // Vector3
+    #worldRotation; // Quaternion
+    
     #parent = null; // Transform
     #childs = [];   // Transform[]
     
@@ -318,7 +325,7 @@ export class Transform {
             new Vector4(0, 0, scale.z, 0),
             new Vector4(0, 0, 0, 1)
         );
-        const R = Transform.euler(rotation);
+        const R = Quaternion.euler(rotation).toMatrix4x4();
         const T = new Matrix4x4(
             new Vector4(1, 0, 0, 0),
             new Vector4(0, 1, 0, 0),
@@ -340,7 +347,7 @@ export class Transform {
             new Vector4(0, 0, 1/scale.z, 0),
             new Vector4(0, 0, 0, 1)
         );
-        const invR = Transform.euler(rotation, true);
+        const invR = Quaternion.euler(rotation).conjugate.toMatrix4x4(); // q*
         const invT = new Matrix4x4(
             new Vector4(1, 0, 0, 0),
             new Vector4(0, 1, 0, 0),
@@ -362,7 +369,7 @@ export class Transform {
             new Vector4(0, 0, 1/scale.z, 0),
             new Vector4(0, 0, 0, 1)
         );
-        const R = this.#invWorldRotation;
+        const R = this.#worldRotation.conjugate.toMatrix4x4(); // q*
         const T = new Matrix4x4(
             new Vector4(1, 0, 0, 0),
             new Vector4(0, 1, 0, 0),
@@ -373,7 +380,7 @@ export class Transform {
     }
 
 
-    // `localTransform` 의 역행렬을 얻습니다.
+    // `localTransform` 으로 TRS 행렬을 만들어 돌려줍니다.
     localTRS() {
         const scale    = this.#localScale;
         const position = this.#localPosition;
@@ -384,7 +391,7 @@ export class Transform {
             new Vector4(0, 0, scale.z, 0),
             new Vector4(0, 0, 0, 1)
         );
-        const R = this.#localRotation;
+        const R = this.#localRotation.toMatrix4x4();
         const T = new Matrix4x4(
             new Vector4(1, 0, 0, 0),
             new Vector4(0, 1, 0, 0),
@@ -395,33 +402,34 @@ export class Transform {
     }
     
 
+    // this.localTransform * parent.worldTransform = this.worldTransform.
     // 부모의 `worldTransform` 과 자신의 `localTransform` 을 사용하여,
     // 자신의 `worldTransform` 을 갱신합니다. 또한 자신의 월드 트랜스폼이
     // 수정되었으므로, 모든 자식들의 월드 트랜스폼 또한 수정되어야 합니다.
     calculateWorld() {
         const parent = this.#parent;
 
-        const s0    = this.#localScale;
-        const r0    = this.#localRotation;
-        const invR0 = this.#invLocalRotation;
-        const t0    = this.#localPosition;
+        const s0 = this.#localScale;
+        const q0 = this.#localRotation;
+        const t0 = this.#localPosition;
 
         if(this.#parent != null) {
-            const s1    = parent.#worldScale;
-            const r1    = parent.#worldRotation;
-            const invR1 = parent.#invWorldRotation;
-            const t1    = parent.#worldPosition;
+            const s1 = parent.#worldScale;
+            const q1 = parent.#worldRotation;
+            const t1 = parent.worldPosition;
 
-            this.#worldScale       = s0.mulVector(s1);                       // s0 * s1
-            this.#worldRotation    = r0.mulMat(r1);                          // r1 * r0
-            this.#invWorldRotation = invR1.mulMat(invR0);                    // r0^(-1) * r1^(-1)
-            this.#worldPosition    = r1.mulVector(t0.toVector4()).toVector3().mulVector(s1).add(t1); // (r1 * t0) * s1 + t1
+            s0.mulVectorNonAlloc(this.#worldScale, s1);  // this.worldScale    = s0 * s1
+            q0.mulQuatNonAlloc(this.#worldRotation, q1); // this.worldRotation = q1 * q0
+
+            const temp0 = q1.mulVectorNonAlloc(this.#worldPosition, t0); // this.worldPosition = (q1 * t0)
+            const temp1 = temp0.mulVectorNonAlloc(temp0, s1);            // this.worldPosition = (q1 * t0) * s1
+            
+            temp1.addNonAlloc(temp1, t1); // this.worldPosition = (q1 * t0) * s1 + t1
         }
         else {
-            this.#worldScale       = s0.clone();
-            this.#worldRotation    = r0;
-            this.#invWorldRotation = invR0;
-            this.#worldPosition    = t0.clone();
+            this.#worldScale.assignVector(s0);
+            this.#worldRotation.assignQuat(q0);
+            this.#worldPosition.assignVector(t0);
         }
 
         for(const child of this.#childs) {
@@ -430,6 +438,7 @@ export class Transform {
     }
 
 
+    // this.localTransform = this.worldTransform * parent.worldTransform^(-1).
     // 자신의 `worldTransform` 과 부모의 `worldTransform` 을 사용하여,
     // 자신의 `localTransform` 을 갱신합니다. 여기서 자식들의 월드 트랜스폼이
     // 수정될 필요는 없습니다. 자신의 월드 트랜스폼은 동일하기 때문입니다.
@@ -437,49 +446,42 @@ export class Transform {
         const parent = this.#parent;
 
         const s0 = this.#worldScale;
-        const r0 = this.#worldRotation;
+        const q0 = this.#worldRotation;
         const t0 = this.#worldPosition;
 
         if(this.#parent != null) {
-
-            const invS1 = new Vector3(
+            const invS1 = Transform.#temp1.assign(
                 1/parent.#worldScale.x, 
                 1/parent.#worldScale.y,
                 1/parent.#worldScale.z
             );
-            const invR1 = parent.#invWorldRotation;
+            const invQ1 = parent.#worldRotation.conjugateNonAlloc(Transform.#temp0);
             const t1    = parent.#worldPosition;
 
-            this.#localScale       = s0.mulVector(invS1);           // s0 * s1^(-1)
-            this.#localRotation    = r0.mulMat(invR1);              // invR1 * r0
-            this.#invLocalRotation = this.#localRotation.inverse(); // (invR1 * r0)^(-1)
-            this.#localPosition    = invR1.mulVector(               // invR1 * ((t0-t1) * invS1)
-                t0.sub(t1).mulVector(invS1).toVector4()
-            ).toVector3();
+            s0.mulVectorNonAlloc(this.#localScale, invS1);  // this.localScale = s0 * s1^(-1)
+            q0.mulQuatNonAlloc(this.#localRotation, invQ1); // this.localRotation = q0 * q1&(-1)
+
+            const temp0 = t0.subNonAlloc(this.#localPosition, t1); // this.localPosition = (t0 - t1)
+            const temp1 = temp0.mulVectorNonAlloc(temp0, invS1);   // this.localPosition = (t0 - t1) * s^(-1)
+            
+            invQ1.mulVectorNonAlloc(temp1, temp1); // invQ1 * ((t0-t1) * invS1)
             return;
         }
-        this.#localPosition    = this.#worldPosition.clone();
-        this.#localRotation    = this.#worldRotation;
-        this.#invLocalRotation = this.#invWorldRotation;
-        this.#localScale       = this.#worldScale.clone();
+        this.#localPosition.assignVector(t0);
+        this.#localRotation.assignQuat(q0);
+        this.#localScale.assignVector(s0);
     }
 
 
     // 루트 트랜스폼을 생성합니다. 생성된 트랜스폼은 어떠한 부모나 자식도 가지고 있지 않습니다.
     constructor(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {
-        const R    = Transform.euler(rotation);
-        const invR = Transform.euler(rotation, true);
+        this.#localPosition = position.clone();           // Vector3
+        this.#localScale    = scale.clone();              // Vector3
+        this.#localRotation = Quaternion.euler(rotation); // Quaternion
 
-        this.#localPosition    = position.clone();
-        this.#localScale       = scale.clone();
-        this.#localRotation    = R;
-        this.#invLocalRotation = invR;
-
-        this.#worldPosition    = position.clone();
-        this.#worldScale       = scale.clone();
-        this.#worldRotation    = R;
-        this.#invWorldRotation = invR;
-        
+        this.#worldPosition = position.clone();            // Vector3
+        this.#worldScale    = scale.clone();               // Vector3
+        this.#worldRotation = this.#localRotation.clone(); // Quaternion
     }
 
 
@@ -491,7 +493,8 @@ export class Transform {
     }
 
 
-    // 모델링 행렬를 얻습니다. 모델링 행렬은 parent.worldTransform * this.localTransform 을 수행합니다.
+    // 모델링 행렬를 얻습니다. model = parent.worldTransform * this.localTransform 을 수행합니다.
+    // 즉 이 함수는 원래 이름이 worldTRS 인 함수라고도 생각할 수 있습니다.
     model() { 
         const scale    = this.#worldScale;
         const position = this.#worldPosition;
@@ -502,7 +505,7 @@ export class Transform {
             new Vector4(0, 0, scale.z, 0),
             new Vector4(0, 0, 0, 1)
         );
-        const R = this.#worldRotation;
+        const R = this.#worldRotation.toMatrix4x4();
         const T = new Matrix4x4(
             new Vector4(1, 0, 0, 0),
             new Vector4(0, 1, 0, 0),
@@ -514,11 +517,11 @@ export class Transform {
     
 
     // `localScale`, `localRotation`, `localPosition` 를 한번에 설정합니다.
-    setTransform(position, scale, rotation) {
-        this.#localScale       = scale.clone();
-        this.#localRotation    = Transform.euler(rotation);
-        this.#invLocalRotation = Transform.euler(rotation, true);
-        this.#localPosition    = position.clone();
+    setLocalTransform(position, scale, rotation) {
+        this.#localScale.assignVector(scale);
+        this.#localPosition.assignVector(position);
+        Quaternion.eulerNonAlloc(this.#localRotation, rotation);
+        
         this.calculateWorld();
     }
 
@@ -549,7 +552,7 @@ export class Transform {
     // 다시 말해, 계층구조를 사용한다면 scale 값의 모든 성분은 (2,2,2) 와 같이 같아야 합니다.
     get localScale() { return this.#localScale.clone(); }
     set localScale(newScale) {
-        this.#localScale = newScale.clone();
+        this.#localScale.assignVector(newScale);
         this.calculateWorld();
     }
 
@@ -559,8 +562,7 @@ export class Transform {
     // 내부적으로는 회전행렬로서 저장됩니다. 이후에는 Quarternion 의 형태가 될 예정입니다.
     get localRotation() { return this.#localRotation.clone(); }
     set localRotation(newRotation) { 
-        this.#localRotation    = Transform.euler(newRotation);
-        this.#invLocalRotation = Transform.euler(newRotation, true);
+        Quaternion.eulerNonAlloc(this.#localRotation, newRotation);
         this.calculateWorld();
     }
 
@@ -569,7 +571,7 @@ export class Transform {
     // 자식들의 `worldTransform` 은 수정됩니다.
     get position() { return this.#localPosition.clone(); }
     set position(newPosition) {
-        this.#localPosition = newPosition.clone();
+        this.#localPosition.assignVector(newPosition);
         this.calculateWorld();
     }
 
@@ -606,15 +608,41 @@ export class Transform {
         this.calculateLocal();
     }
 
-    // `worldScale` 을 얻습니다.
+    // `worldScale` 을 수정하거나 얻습니다. `worldTransform` 이 변경되므로, 자신의 localTransform
+    // 과 자신의 자식들의 localTransform 은 재계산되어야 합니다.
     get worldScale() { return this.#worldScale.clone(); }
+    set worldScale(newScale) {
+        this.#worldScale.assignVector(newScale);
+        this.calculateLocal();
 
-    // `worldPosition` 을 얻습니다. 
+        for(const child of this.#childs) {
+            child.calculateLocal();
+        }
+    }
+    
+    // `worldPosition` 을 얻습니다. `worldTransform` 이 변경되므로, 자신의 localTransform
+    // 과 자신의 자식들의 localTransform 은 재계산되어야 합니다.
     get worldPosition() { return this.#worldPosition.clone(); }
+    set worldPosition(newPosition) {
+        this.#worldPosition.assignVector(newPosition);
+        this.calculateLocal();
 
-    // `worldRotation` 을 얻습니다.
+        for(const child of this.#childs) {
+            child.calculateLocal();
+        }
+    }
+
+    // `worldRotation` 을 얻습니다. `worldTransform` 이 변경되므로, 자신의 localTransform
+    // 과 자신의 자식들의 localTransform 은 재계산되어야 합니다.
     get worldRotation() { return this.#worldRotation.clone(); }
+    set worldRotation(newRotation) {
+        Quaternion.eulerNonAlloc(this.#worldRotation, newRotation);
+        this.calculateLocal();
 
+        for(const child of this.#childs) {
+            child.calculateLocal();
+        }
+    }
 
     /***************
      * for optimizing
@@ -648,29 +676,25 @@ export class Transform {
 
     // invTRS() 와 같되, 결과를 out 으로 출력합니다.
     static invTRSNonAlloc(out, position, scale, rotation) {
-        const invSx = 1/scale.x;
-        const invSy = 1/scale.y;
-        const invSz = 1/scale.z;
+        const invS = Transform.#temp2;
+        const invR = Transform.#temp3;
+        const invT = Transform.#temp4;
 
-        const rotX = rotation.x * MyMath.deg2rad;
-        const rotY = rotation.y * MyMath.deg2rad;
-        const rotZ = rotation.z * MyMath.deg2rad;
+        invS.basisX.assign(1/scale.x, 0, 0, 0);
+        invS.basisY.assign(0, 1/scale.y, 0, 0);
+        invS.basisZ.assign(0, 0, 1/scale.z, 0);
+        invS.basisW.assign(0,0,0,1);
 
-        const sinX = Math.sin(rotX), cosX = Math.cos(rotX); // x축 회전에 쓰일 Sin, Cos 값
-        const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
-        const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
+        const q    = Quaternion.eulerNonAlloc(Transform.#temp0, rotation);
+        const invQ = q.conjugateNonAlloc(q); 
+        invQ.toMatrix4x4NonAlloc(invR);
 
-        out.basisX.assign((invSx)*(((cosY)*(cosZ))+((-sinY)*((-sinX)*(sinZ)))), (invSy)*((cosX)*(sinZ)), (invSz)*(((sinY)*(cosZ))+((cosY)*((-sinX)*(sinZ)))), 0);
-        out.basisY.assign((invSx)*(((cosY)*(-sinZ))+((-sinY)*((-sinX)*(cosZ)))), (invSy)*((cosX)*(cosZ)), (invSz)*(((sinY)*(-sinZ))+((cosY)*((-sinX)*(cosZ)))), 0);
-        out.basisZ.assign((invSx)*((-sinY)*(cosX)), (invSy)*(sinX), (invSz)*((cosY)*(cosX)), 0);
-        out.basisW.assign(
-            (invSx)*(((cosY)*(((cosZ)*(-position.x))+((-sinZ)*(-position.y))))+((-sinY)*(((-sinX)*(((sinZ)*(-position.x))+((cosZ)*(-position.y))))+((cosX)*(-position.z))))), 
-            (invSy)*(((cosX)*(((sinZ)*(-position.x))+((cosZ)*(-position.y))))+((sinX)*(-position.z))), 
-            (invSz)*(((sinY)*(((cosZ)*(-position.x))+((-sinZ)*(-position.y))))+((cosY)*(((-sinX)*(((sinZ)*(-position.x))+((cosZ)*(-position.y))))+((cosX)*(-position.z))))), 
-            1
-        );
+        invT.basisX.assign(1,0,0,0);
+        invT.basisY.assign(0,1,0,0);
+        invT.basisZ.assign(0,0,1,0);
+        invT.basisW.assign(-position.x, -position.y, -position.z, 1);
 
-        return out;
+        return invT.mulMatNonAlloc(out, invR, invS);
     }
 
 
@@ -678,17 +702,25 @@ export class Transform {
     modelNonAlloc(out) { 
         const scale    = this.#worldScale;
         const position = this.#worldPosition;
+        const rotation = this.#worldRotation;
 
-        const RX = this.#worldRotation.basisX;
-        const RY = this.#worldRotation.basisY;
-        const RZ = this.#worldRotation.basisZ;
-        const RW = this.#worldRotation.basisW;
+        const S = Transform.#temp2;
+        const R = Transform.#temp3;
+        const T = Transform.#temp4;
 
-        out.basisX.assign(((RX.x)*(scale.x))+((position.x)*((RX.w)*(scale.x))), ((RX.y)*(scale.x))+((position.y)*((RX.w)*(scale.x))), ((RX.z)*(scale.x))+((position.z)*((RX.w)*(scale.x))), (RX.w)*(scale.x));
-        out.basisY.assign(((RY.x)*(scale.y))+((position.x)*((RY.w)*(scale.y))), ((RY.y)*(scale.y))+((position.y)*((RY.w)*(scale.y))), ((RY.z)*(scale.y))+((position.z)*((RY.w)*(scale.y))), (RY.w)*(scale.y));
-        out.basisZ.assign(((RZ.x)*(scale.z))+((position.x)*((RZ.w)*(scale.z))), ((RZ.y)*(scale.z))+((position.y)*((RZ.w)*(scale.z))), ((RZ.z)*(scale.z))+((position.z)*((RZ.w)*(scale.z))), (RZ.w)*(scale.z));
-        out.basisW.assign((RW.x)+((position.x)*(RW.w)), (RW.y)+((position.y)*(RW.w)), (RW.z)+((position.z)*(RW.w)), RW.w);
-        return out;
+        S.basisX.assign(scale.x, 0, 0, 0);
+        S.basisY.assign(0, scale.y, 0, 0);
+        S.basisZ.assign(0, 0, scale.z, 0);
+        S.basisW.assign(0, 0, 0, 1);
+
+        rotation.toMatrix4x4NonAlloc(R);
+
+        T.basisX.assign(1, 0, 0, 0);
+        T.basisY.assign(0, 1, 0, 0);
+        T.basisZ.assign(0, 0, 1, 0);
+        T.basisW.assign(position.x, position.y, position.z, 1);
+
+        return S.mulMatNonAlloc(out, R, T);
     }
 
 
@@ -696,27 +728,26 @@ export class Transform {
     invWorldTRSNonAlloc(out) {
         const scale    = this.#worldScale;
         const position = this.#worldPosition;
+        const rotation = this.#worldRotation;
 
-        const invSx = 1/scale.x;
-        const invSy = 1/scale.y;
-        const invSz = 1/scale.z;
+        const S = Transform.#temp2;
+        const R = Transform.#temp3;
+        const T = Transform.#temp4;
 
-        const RX = this.#invWorldRotation.basisX;
-        const RY = this.#invWorldRotation.basisY;
-        const RZ = this.#invWorldRotation.basisZ;
-        const RW = this.#invWorldRotation.basisW;
+        S.basisX.assign(1/scale.x, 0, 0, 0);
+        S.basisY.assign(0, 1/scale.y, 0, 0);
+        S.basisZ.assign(0, 0, 1/scale.z, 0);
+        S.basisW.assign(0, 0, 0, 1);
 
-        out.basisX.assign(invSx*RX.x, invSy*RX.y, invSz*RX.z, RX.w);
-        out.basisY.assign(invSx*RY.x, invSy*RY.y, invSz*RY.z, RY.w);
-        out.basisZ.assign(invSx*RZ.x, invSy*RZ.y, invSz*RZ.z, RZ.w);
+        const invQ = rotation.conjugateNonAlloc(Transform.#temp0);
+        invQ.toMatrix4x4NonAlloc(R);
 
-        out.basisW.assign(
-            (invSx)*(((((RX.x)*(-position.x))+((RY.x)*(-position.y)))+((RZ.x)*(-position.z)))+(RW.x)), 
-            (invSy)*(((((RX.y)*(-position.x))+((RY.y)*(-position.y)))+((RZ.y)*(-position.z)))+(RW.y)), 
-            (invSz)*(((((RX.z)*(-position.x))+((RY.z)*(-position.y)))+((RZ.z)*(-position.z)))+(RW.z)), 
-            ((((RX.w)*(-position.x))+((RY.w)*(-position.y)))+((RZ.w)*(-position.z)))+(RW.w)
-        );
-        return out;
+        T.basisX.assign(1,0,0,0);
+        T.basisY.assign(0,1,0,0);
+        T.basisZ.assign(0,0,1,0);
+        T.basisW.assign(-position.x, -position.y, -position.z, 1);
+
+        return T.mulMatNonAlloc(out, R, S);
     }
 
 
@@ -742,20 +773,24 @@ export class Transform {
 
     // TRS() 와 같되, 결과를 out 에 저장합니다.
     static TRSNonAlloc(out, position, scale, rotation) {
-        const rotX = rotation.x * MyMath.deg2rad;
-        const rotY = rotation.y * MyMath.deg2rad;
-        const rotZ = rotation.z * MyMath.deg2rad;
+        const S = Transform.#temp2;
+        const R = Transform.#temp3;
+        const T = Transform.#temp4;
 
-        const sinX = Math.sin(rotX), cosX = Math.cos(rotX); // x축 회전에 쓰일 Sin, Cos 값
-        const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
-        const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
+        S.basisX.assign(scale.x, 0, 0, 0);
+        S.basisY.assign(0, scale.y, 0, 0);
+        S.basisZ.assign(0, 0, scale.z, 0);
+        S.basisW.assign(0, 0, 0, 1);
 
-        out.basisX.assign((cosZ*cosY*scale.x)+(sinZ*-sinX*-sinY*scale.x), ((-sinZ)*((cosY)*(scale.x)))+((cosZ)*((-sinX)*((-sinY)*(scale.x)))), cosX*-sinY*scale.x, 0);
-        out.basisY.assign((sinZ)*((cosX)*(scale.y)), (cosZ)*((cosX)*(scale.y)), (sinX)*(scale.y), 0);
-        out.basisZ.assign(((cosZ)*((sinY)*(scale.z)))+((sinZ)*((-sinX)*((cosY)*(scale.z)))), ((-sinZ)*((sinY)*(scale.z)))+((cosZ)*((-sinX)*((cosY)*(scale.z)))), (cosX)*((cosY)*(scale.z)), 0);
-        out.basisW.assign(position.x, position.y, position.z, 1);
+        const q = Quaternion.eulerNonAlloc(Transform.#temp0, rotation);
+        q.toMatrix4x4NonAlloc(R);
 
-        return out;
+        T.basisX.assign(1, 0, 0, 0);
+        T.basisY.assign(0, 1, 0, 0);
+        T.basisZ.assign(0, 0, 1, 0);
+        T.basisW.assign(position.x, position.y, position.z, 1);
+
+        return S.mulMatNonAlloc(out, R, T);
     }
 };
 
@@ -1357,9 +1392,9 @@ export class BoxCollider {
 export class Bone {
     static renderer = null;
 
-    static #temp0   = Matrix4x4.identity;
-    static #temp1   = Matrix4x4.identity;
-    static #frustum = new Frustum();
+    static #temp0   = Matrix4x4.identity; // Matrix4x4
+    static #temp1   = Matrix4x4.identity; // Matrix4x4
+    static #frustum = new Frustum();      // Frustum
 
     bindPose       = null;  // 본의 최초 트랜스폼.
     $transform     = null;  // 본의 트랜스폼.
@@ -1371,91 +1406,42 @@ export class Bone {
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
 
-    boneColor = Color.black; // 본의 색깔을 지정
+    boneColor = new Color(1, 0.64, 0, 1); // 본의 색깔을 지정
 
     // 루트 본을 생성합니다. 
     constructor(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {
         this.bindPose = {
-            scale    : scale,
-            position : position,
-            rotation : rotation
+            scale    : scale,    // Vector3
+            position : position, // Vector3
+            rotation : rotation  // Vector3
         };
         this.$transform = new Transform(position, scale, rotation);
 
         // 본을 표시하기 위한, 메시를 생성합니다. 최초 한번만 생성합니다.
         if(Bone.renderer==null) {
-            const renderer = Bone.renderer          = new Renderer();
-            const mesh     = Bone.renderer.mesh     = new Mesh();
-            const mat      = Bone.renderer.material = new Material();
+            const renderer = Bone.renderer      = new Renderer();
+            const mesh     = Bone.renderer.mesh = new Mesh();
 
-            const bigCircle   = [];
-            const smallCircle = [];
-
-            mesh.vertices = [];
-            mesh.uvs      = [Vector2.zero];
-            mesh.indices  = [];
-
-
-            // (1,0,0) 을 회전시켜 정점들을 얻어낸다.
-            for(let rad=0; rad<=MyMath.twoPI+1; rad+=30*MyMath.deg2rad) {
-                const s = Math.sin(rad);
-                const c = Math.cos(rad);
-                const p = new Vector3(c, 0, -s);
-
-                bigCircle.push(p.mul(0.3));
-                smallCircle.push(p.mul(0.15));
-            }
-
-            // `bigCircle` 의 정점들을 모두 푸시
-            mesh.vertices.push(new Vector3(0, 1, 0) );
-            for(let i=0; i<bigCircle.length; ++i) mesh.vertices.push(bigCircle[i].add(Vector3.up.mul(0.7)) );
-
-
-            // 화살표 머리의 뿔 부분
-            for(let i=1; i<mesh.vertices.length-1; ++i) {
-                mesh.indices.push(0); mesh.indices.push(i); mesh.indices.push(i+1); // for vertex
-                mesh.indices.push(0); mesh.indices.push(0); mesh.indices.push(0);   // for uv
-            }
-
-            mesh.vertices.push(new Vector3(0, 0.7, 0));
-            const origin = mesh.vertices.length-1;
-
-
-            // 화살표 머리의 바닥 부분
-            for(let i=1; i<mesh.vertices.length-2; ++i) {
-                mesh.indices.push(i+1); mesh.indices.push(i); mesh.indices.push(origin); // for vertex
-                mesh.indices.push(0); mesh.indices.push(0); mesh.indices.push(0);   // for uv
-            }
-
-
-            // `smallCircle` 의 정점들을 모두 푸시
-            for(let i=0; i<smallCircle.length; ++i) mesh.vertices.push(smallCircle[i].add(Vector3.up.mul(0.7)) );
-            for(let i=0; i<smallCircle.length; ++i) mesh.vertices.push(smallCircle[i] );
-
-            const offset = smallCircle.length;
-           
-            // 화살표 몸통의 기둥 부분
-            for(let i=origin+1; i<origin+offset-1; ++i) {
-                mesh.indices.push(i+1+offset); mesh.indices.push(i+1); mesh.indices.push(i);
-                mesh.indices.push(0); mesh.indices.push(0); mesh.indices.push(0);
-
-                mesh.indices.push(i+1+offset); mesh.indices.push(i); mesh.indices.push(i+offset);
-                mesh.indices.push(0); mesh.indices.push(0); mesh.indices.push(0);
-            }
-
-            mesh.vertices.push(new Vector3(0, 0, 0) );
-            const end = mesh.vertices.length-1;
-
-            // 화살표 몸통의 바닥 부분
-            for(let i=origin+offset+1; i<mesh.vertices.length-1; ++i) {
-                mesh.indices.push(i+1); mesh.indices.push(i); mesh.indices.push(end);
-                mesh.indices.push(0); mesh.indices.push(0); mesh.indices.push(0);
-            }
-
-            
-            // 화살표는 빨간색으로 출력
+            mesh.vertices = [
+                new Vector3(0,0,0),           // 0
+                new Vector3(0.2, 0.2, -0.2),  // 1
+                new Vector3(0.2, 0.2, 0.2),   // 2
+                new Vector3(-0.2, 0.2, 0.2),  // 3
+                new Vector3(-0.2, 0.2, -0.2), // 4
+                new Vector3(0,1,0)            // 5
+            ];
+            mesh.uvs = [Vector2.zero];
+            mesh.indices = [
+                0,4,1, 0,0,0,
+                3,4,0, 0,0,0,
+                2,3,0, 0,0,0,
+                1,2,0, 0,0,0,
+                4,5,1, 0,0,0,
+                3,5,4, 0,0,0,
+                2,5,3, 0,0,0,
+                1,5,2, 0,0,0,
+            ];
             mesh.collider           = new BoxCollider(mesh);
-            mat.triangleCount       = mesh.triangleCount;
             renderer.wireFrameMode  = true;
         }
     }
@@ -1483,7 +1469,7 @@ export class Bone {
     drawBone(finalMat) {
         const parent = this.#parent;
 
-        if(this.#parent!=null) {
+        if(parent != null) {
 
             if(this.$bindPoseDirty) {
                 const pose0 = this.bindPose;
@@ -1492,26 +1478,28 @@ export class Bone {
                 const diff   = pose0.position.sub(pose1.position);
                 const length = diff.magnitude;
                 const lookAt = diff.normalized;
-                const axis   = Vector3.cross(Vector3.up, lookAt);
+                const up     = Vector3.up;
+                let   axis   = Vector3.cross(up, lookAt); // |axis| = |up||lookAt||sin| 이므로, 0 <= |axis| <= 1. 혹시 모르니 정규화가 필요.
 
-                const acosInput = MyMath.clamp(Vector3.dot(lookAt, Vector3.up), -1, 1);
-                let   angle     = Math.acos(acosInput) * MyMath.rad2deg;
+                if(axis.sqrMagnitude == 0) { // axis = (0,0,0) 라면, up과 평행한 벡터이므로 
+                    axis = up;               // 회전축은 그대로 up 으로 해준다.
+                }
 
-                const scale = new Matrix4x4(
+                const S = new Matrix4x4(
                     new Vector4(1, 0, 0, 0),
                     new Vector4(0, length, 0, 0),
                     new Vector4(0, 0, 1, 0),
                     new Vector4(0, 0, 0, 1)
                 );
-                const rotate   = Transform.rodrigues(axis, angle);
-                const translate = new Matrix4x4(
+                const R = Quaternion.rotationMatrix(axis.normalized, Vector3.angle(lookAt,up) );
+                const T = new Matrix4x4(
                     new Vector4(1, 0, 0, 0),
                     new Vector4(0, 1, 0, 0),
                     new Vector4(0, 0, 1, 0),
                     diff.mul(-1).toVector4()
                 ); 
-                const bindPose = Transform.TRS(pose0.position, pose0.scale, pose0.rotation);
-                scale.mulMatNonAlloc(this.#drawBoneCache, rotate, translate, bindPose);
+                const pose = Transform.TRS(pose0.position, pose0.scale, pose0.rotation);
+                S.mulMatNonAlloc(this.#drawBoneCache, R, T, pose);
 
                 this.$bindPoseDirty = false;
             }
@@ -1599,8 +1587,10 @@ export class Bone {
         this.#setDirty();
         this.$transform.position = newPosition;
     }
+};
 
-    setBindPose() {
-        
-    }
+export class Animator {
+
+    // todo..
+    // for fbx.h
 };

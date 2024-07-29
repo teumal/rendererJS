@@ -49,6 +49,8 @@ const result1 = u.add(v.sub(w) ); // u + (v-w)
 **EDIT 24/7/18**: testOrigin, clipOrigin 함수 삭제. 이 프로젝트에서 zNear 는 항상 0보다 크다고 가정하기 때문. 결과적으로 캐릭터가 카메라와 근접했을 때, 약간의 성능 증가. 
 MyMath 에 NonAlloc 버전의 함수들을 추가. 
 
+**EDIT 24/7/29**: Quaternion 클래스 추가. 잡다한 버그 수정. 이후 "fbx.h" 와 Animator 등이 추가될 예정.
+
 <br>
 <br>
 

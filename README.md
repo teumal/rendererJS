@@ -431,4 +431,4 @@ lisaTex0 = new Texture("./resource/Texture\头发.png", ()=>{
 위 코드를 보면 `Texture` 생성자에 줄 파일의 경로가 잘못됨을 알 수 있는데, 이런 부분들은 직접 수정하셔야 합니다. <br>
 최종 결과는 다음과 같습니다:
 
-<img src="https://www.notion.so/image/https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Ffe6e2013-3ec2-466b-a297-5e801e33afd0%2F12466090-acfe-4609-9f8d-42bb818a9876%2F%25EC%25BA%25A1%25EC%25B2%2598.jpg?table=block&id=182bd357-2e0a-41e6-8e14-d097f512d8e9&spaceId=fe6e2013-3ec2-466b-a297-5e801e33afd0&width=960&userId=e5dbbac3-bab2-4665-9e2b-68f3a45f7778&cache=v2">
+<img src="https://postfiles.pstatic.net/MjAyNDA3MTdfMjYz/MDAxNzIxMTU5NDAyOTQx.3J5FDyIHstOSssipVtyV4eMHskkSd1EwsdfCZLki0iUg.YhqQbWzoJB6s6UOBf-pMD2lqrdCyhynsbTqxJyzDlIgg.JPEG/%EC%BA%A1%EC%B2%98.JPG?type=w3840">

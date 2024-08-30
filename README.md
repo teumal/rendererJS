@@ -51,6 +51,10 @@ MyMath 에 NonAlloc 버전의 함수들을 추가.
 
 **EDIT 24/7/29**: Quaternion 클래스 추가. 잡다한 버그 수정. 이후 "fbx.h" 와 Animator 등이 추가될 예정.
 
+***EDIT 24/8/30*: AnimationState, AnimationCurve, RotationOrder 등 fbx.h 를 위한 다양한 기능이 추가되었습니다. 이 기능들이 모두 완성된 것은 아니지만, 중간 커밋을 위해
+업데이트 합니다. 사용법에 대한 설명은 아래 Example 을 참고하시길 바랍니다. 또한 Transform.invTRSNonAlloc 에서 Quaternion.conjugateNonAlloc 이 잘못되는 버그가
+수정되었습니다.
+
 <br>
 <br>
 
@@ -214,47 +218,10 @@ sif.renderer.materials = [mat0, mat1, mat2]; // 서브메시 사용
 <img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMSAg/MDAxNzA5MDM0NjgxMjUx.eRJSpHptCg87MaLSzZS2nT1VfkCTEckxYDs-lYFtjzIg.O3pjc4F38Bfe52d-gCltpzCQlmSwh_uFrQ0-bz_uorsg.JPEG/%EB%86%80%EB%9E%80_%EC%8B%9C%ED%94%84.JPG?type=w773">
 <img src="https://postfiles.pstatic.net/MjAyNDAyMjdfMjMg/MDAxNzA5MDM0Njc0MDE2.iBJnmDzHr6dUDMhdEzduym46rMAssBOntQB062g4VDIg.5-GFU3fdTp9gXmKD-CPtT9D8kG_Nl0FH9x8bbNieur4g.JPEG/%EC%8B%9C%ED%94%84_%EB%B3%B8.JPG?type=w773">
 
-스켈레탈 애니메이션의 경우, 애니메이션 그래프 등은 없고 대신 `update` 에서 `Math.sin` 등의 함수를 사용하여 <br>
-직접 구현해줄 수 있습니다:
-
-``` js
-const rightArm = sifMesh.bones["Bip01-R-Clavicle01"];
-const leftArm  = sifMesh.bones["Bip01-L-Clavicle01"];
-const tail     = sifMesh.bones["tail 1"];
-const rightLeg = sifMesh.bones["Bip01-R-Calf01"];
-const leftLeg  = sifMesh.bones["Bip01-L-Calf01"];
-
-const tailRotation     = Transform.toEuler(tail.localRotation);
-const rightArmRotation = Transform.toEuler(rightArm.localRotation);
-const leftArmRotation  = Transform.toEuler(leftArm.localRotation);
-const rightLegRotation = Transform.toEuler(rightLeg.localRotation);
-const leftLegRotation  = Transform.toEuler(leftLeg.localRotation);
-let   rad              = 0;
-
-sif.update = ()=>{
-   // ...omitted..
-
-   // skeletal animation
-    const angle = Math.sin(rad += deltaTime*Math.PI) * 45;
-
-    tailRotation.y = angle;
-    rightArmRotation.x = angle;
-    leftArmRotation.x = -angle;
-    leftLegRotation.x = angle;
-    rightLegRotation.x = -angle;
-
-    leftArm.transform.localRotation = leftArmRotation;
-    rightArm.transform.localRotation = rightArmRotation;
-    leftLeg.transform.localRotation = leftLegRotation;
-    rightLeg.transform.localRotation = rightLegRotation;
-    tail.transform.localRotation = tailRotation;
-};
-```
-<img src="https://postfiles.pstatic.net/MjAyNDAzMDRfMjg0/MDAxNzA5NTI5NDI3OTg5.5-MrNU9KLpyfnu_kA5qHfaNw6VEy59MLXBdeVSctSG8g.YX2qfCm4g5He4oL179huryTFgiGz4p7iLw_w2ufDEWUg.JPEG/%EC%BA%A1%EC%B2%98.JPG?type=w773">
-
 ## Example3
 
-마지막 예제는 원신의 리사(丽莎)를 렌더링합니다. 여기서는 C++ 로 PMX 파일을 읽고, rendererJS 와 호환되는 js 파일을 써주는 <br>
+세번째 예제는 원신의 리사(丽莎)를 렌더링합니다. 여기서는 C++ 로 PMX 파일을 읽고, rendererJS 와 호환되는 js 파일을 써주는 <br>
+
 `pmx.h` 헤더파일을 간단히 소개합니다. 먼저 `pmx.h` 를 다운받으시고, 아래 코드를 작성해주시길 바랍니다:
 
 ``` c++
@@ -432,3 +399,34 @@ lisaTex0 = new Texture("./resource/Texture\头发.png", ()=>{
 최종 결과는 다음과 같습니다:
 
 <img src="https://postfiles.pstatic.net/MjAyNDA3MTdfMjYz/MDAxNzIxMTU5NDAyOTQx.3J5FDyIHstOSssipVtyV4eMHskkSd1EwsdfCZLki0iUg.YhqQbWzoJB6s6UOBf-pMD2lqrdCyhynsbTqxJyzDlIgg.JPEG/%EC%BA%A1%EC%B2%98.JPG?type=w3840">
+
+## Example4
+
+이번 예제는 새롭게 추가된 `AnimationState`, `AnimationCurve` 클래스들을 간단하게 소개합니다.<br>
+`AnimationCurve` 는 여러 개의 spline 들로 구성됩니다. 각 spline 들은 `AnimationCurve.constant()`, <br>
+`AnimationCurve.linear()`, `AnimationCurve.bezier()` 중 하나입니다. 예를 들어, 그래프를 다음과 같이
+초기화해줄 수 있다는 의미입니다:
+
+``` js
+const curve = new AnimationCurve(
+  AnimationCurve.bezier(/* parameters... */),
+  AnimationCurve.bezier(/* parameters... */),
+  AnimationCurve.linear(/* parameters... */)
+);
+```
+예를 들어, `AnimationCurve.bezier` 는 3차 베이저 곡선을 의미합니다. 그렇기에 p0, p1, p2, p3 이라는 4개의 점이 <br>
+필요합니다. 여기서 시작점과 끝점이 p1, p3 이며, control point 로 p1, p2 를 사용합니다. 하지만, `bezier()` 함수의 <br>
+인자에는 p1, p2 가 없는데, 이는 대신 접선의 기울기인 tangent0, tangent1 와 가중치 weight0, weight1 를 사용하여 <br>
+p1, p2 를 정의할 것이기 때문입니다. 
+
+tangent0 은 점 p0, p1 을 지나는 접선의 기울기를 의미하며, weight0 은 p1.x 의 값을 구하는데 사용됩니다. <br>
+예를 들어 p0.x 과 p3.x 사이의 거리가 100 이라면, weight0 = 0.3 은 p1.x = 30 임을 의미하게 된다는 의미입니다. <br>
+weight0 값의 기본값은 0.333 이며, 가중치가 없음을 의미합니다. 이는 0.333 일때, 가중치는 없는거나 마찬가지이기 때문입니다. <br>
+이렇게 구한 x 값과 tangent0 으로, y = ax + b 식을 사용하여, p1.y 의 값을 구할 수 있게 됩니다. <br>
+
+tangent1, weight1 도 비슷합니다. p2, p3 을 지나는 접선을 정의하는데 사용되며, weight1 은 p3.x 의 값을 구하는데 사용됩니다. <br>
+차이가 있다면, p0.x 과 p3.x 사이의 거리가 100 이라고 할 때, weight1 = 0.3 은 p2.x = 70 이 됨을 의미한다는 것입니다. <br>
+이는 weight1 의 가중치는 내부적으로 (1 - weight1) 로 계산하여 사용하기 때문입니다.
+
+
+

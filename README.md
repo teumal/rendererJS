@@ -408,11 +408,11 @@ lisaTex0 = new Texture("./resource/Texture\头发.png", ()=>{
 초기화해줄 수 있다는 의미입니다:
 
 ``` js
-const curve = new AnimationCurve(
+const curve = new AnimationCurve([
   AnimationCurve.bezier(/* parameters... */),
   AnimationCurve.bezier(/* parameters... */),
   AnimationCurve.linear(/* parameters... */)
-);
+]);
 ```
 예를 들어, `AnimationCurve.bezier` 는 3차 베이저 곡선을 의미합니다. 그렇기에 p0, p1, p2, p3 이라는 4개의 점이 <br>
 필요합니다. 여기서 시작점과 끝점이 p1, p3 이며, control point 로 p1, p2 를 사용합니다. 하지만, `bezier()` 함수의 <br>

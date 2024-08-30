@@ -512,5 +512,7 @@ x, y, z 에 대한 곡선이 3개가 필요합니다. 그렇기에 위 예제에
 
 이제 새로운 예제인 `man.js` 를 보도록 하겠습니다. 위 예제는 단순히 걷는 남성을 렌더링합니다:
 
+<img src="https://github.com/teumal/rendererJS/blob/main/%EC%95%A0%EB%8B%88%EB%A9%94%EC%9D%B4%EC%85%98%20%EC%98%88%EC%A0%9C.gif?raw=true">
 
+fbx.h 는 조만간 추가될 예정입니다.
 

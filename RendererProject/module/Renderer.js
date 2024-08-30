@@ -8,10 +8,11 @@ export const MeshType = {
 };
 
 export const WeightType = {
-    Linear         : 0,
-    Blend          : 1,
-    DualQuaternion : 2
+    Linear         : 0, // 
+    Blend          : 1, // 
+    DualQuaternion : 2  // 
 };
+
 
 export class Color {
     r; g; b; a;
@@ -138,6 +139,7 @@ export class Renderer {
     wireFrameColor  = Color.black; // 와이어 프레임의 선 색깔
     wireFrameMode   = false;       // 와이어 프레임으로 메시를 그릴지 여부
     backfaceCulling = true;        // 백페이스 컬링 적용 여부
+    zTest           = true;        // 깊이 버퍼를 사용할지 여부
 
     #vertexShader   = (vertex, finalMat)=>{ return finalMat.mulVectorNonAlloc(vertex,vertex); }; // 디폴트 정점 셰이더
     #fragmentShader = (uv, pos)=>{ return new Color(255, 0, 221,1); };                           // 디폴트 픽셀 셰이더
@@ -404,7 +406,7 @@ export class Renderer {
     // 원을 그립니다. `center` 는 항상 월드 좌표계 위의 점이어야 합니다.
     drawArc2D(center, radius, color=Color.black) {
         center = this.camera.worldToScreen(center);
-        radius = radius * Camera.tileSize;
+        radius = this.camera.worldToScreen(new Vector2(radius)).x - this.camera.screenSize.x * 0.5;
 
         const sqrRadius = radius * radius;
         const xMin      = center.x - radius;
@@ -724,7 +726,7 @@ export class Renderer {
                     const depthIndex = p.x * this.camera.screenSize.x + p.y;
                     const depth      = zPos0*s + zPos1*t + zPos2*oneMinusST; 
 
-                    if(this.camera.depthBuffer[depthIndex] < depth) {
+                    if(this.zTest && this.camera.depthBuffer[depthIndex] < depth) {
                        continue;
                     }
                     this.camera.depthBuffer[depthIndex] = depth;
@@ -763,8 +765,8 @@ export class Renderer {
         }
         pClip.mulNonAlloc(pClip, (1/pClip.w) ); // pClip = this.camera.clipToNDC(pClip);
 
-        const halfw = this.camera.screenSize.x * 0.5 / Camera.tileSize;
-        const halfh = this.camera.screenSize.y * 0.5 / Camera.tileSize;
+        const halfw = this.camera.screenSize.x * 0.5 / Camera.tileSizeX;
+        const halfh = this.camera.screenSize.y * 0.5 / Camera.tileSizeY;
 
         pClip.assign( // pClip = this.camera.stretchNDC(pClip);
             pClip.x * halfw,
@@ -782,8 +784,8 @@ export class Renderer {
         const halfh = this.camera.screenSize.y * 0.5;
 
         return out.assign(
-            Math.round(worldPosition.x * Camera.tileSize + halfw),
-            Math.round(-worldPosition.y * Camera.tileSize+ halfh)
+            Math.round(worldPosition.x * Camera.tileSizeX + halfw),
+            Math.round(-worldPosition.y * Camera.tileSizeY+ halfh)
         );
     }
 

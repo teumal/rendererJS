@@ -1,13 +1,15 @@
-export const deg2rad    = Math.PI / 180;
-export const rad2deg    = 180 / Math.PI;
-export const deg2rad1_2 = deg2rad * 0.5;
-export const twoPI      = Math.PI * 2;
+import {GameEngine} from "./GameEngine.js";
 
 export const Bound = {
    Outside   : 0,
    Inside    : 1,
    Intersect : 2,
 };
+
+export const deg2rad    = Math.PI / 180;
+export const rad2deg    = 180 / Math.PI;
+export const deg2rad1_2 = deg2rad * 0.5;
+export const twoPI      = Math.PI * 2;
 
 
 // `value` 를 [min, max] 범위로 보간합니다.
@@ -17,9 +19,9 @@ export function clamp(value, min, max) {
     return value;
 }
 
-// `lhs` 가 `rhs` 와 오차범위 안에서 같은지 계산합니다.
-export function equalInTolerance(lhs, rhs) {
-    if(rhs-Number.EPSILON <= lhs && lhs <= rhs+Number.EPSILON) {
+// `lhs` 가 `rhs` 와 오차범위 `tolerance` 안에서 같은지 계산합니다.
+export function equalApprox(lhs, rhs, tolerance=Number.EPSILON) {
+    if(rhs-tolerance <= lhs && lhs <= rhs+tolerance) {
         return true;
     }
     return false;
@@ -31,6 +33,19 @@ export class Vector2 {
    
     // 두 벡터들의 내적(dot product)의 결과를 돌려줍니다.
     static dot(u, v) { return (u.x * v.x) + (u.y * v.y); }
+
+
+    // 두 벡터들을 보간하여 (1-t) * p0 + t * p1 를 돌려줍니다.
+    static lerp(p0, p1, t) {
+        const temp0 = p0.mul(1-t); // (1-t) * p0
+        const temp1 = p1.mul(t);   // t * p1
+        return temp0.add(temp1);
+    }
+
+
+    // p0-p1 사이의 거리를 돌려줍니다.
+    static distance(p0,p1) { return p0.sub(p1).magnitude; }
+
 
     // 자주 쓰는 벡터들의 축약형
     static get zero() { return new Vector2(0,0); }
@@ -935,7 +950,7 @@ export class Matrix4x4 {
    inverse() {
        const det = this.det();
 
-       if(equalInTolerance(det,0) ) {
+       if(equalApprox(det,0) ) {
            return null;
        }
        const invDet = 1 / det;
@@ -1271,7 +1286,7 @@ export class Frustum {
         }
         for(const plane of this.planes) {
 
-            if(equalInTolerance(plane.distance(p), 0) ) {
+            if(equalApprox(plane.distance(p), 0) ) {
                 return Bound.Intersect;
             }
         }
@@ -1281,11 +1296,30 @@ export class Frustum {
 
 
 export class Quaternion {
-    w; v; // scalar, vector3
+    
+    static #eulerFunc = [
+        (yaw,pitch,roll) => pitch.mulQuat(yaw, roll), // EULER_XYZ
+        (yaw,pitch,roll) => pitch.mulQuat(roll,yaw),  // EULER_XZY
+        (yaw,pitch,roll) => yaw.mulQuat(roll,pitch),  // EULER_YZX
+        (yaw,pitch,roll) => yaw.mulQuat(pitch,roll),  // EULER_YXZ
+        (yaw,pitch,roll) => roll.mulQuat(pitch,yaw),  // EULER_ZXY
+        (yaw,pitch,roll) => roll.mulQuat(yaw,pitch),  // EULER_ZYX
+    ];
+    static #eulerNonAllocFunc = [
+        (out,yaw,pitch,roll) => pitch.mulQuatNonAlloc(out, yaw, roll), // EULER_XYZ
+        (out,yaw,pitch,roll) => pitch.mulQuatNonAlloc(out, roll,yaw),  // EULER_XZY
+        (out,yaw,pitch,roll) => yaw.mulQuatNonAlloc(out, roll,pitch),  // EULER_YZX
+        (out,yaw,pitch,roll) => yaw.mulQuatNonAlloc(out, pitch,roll),  // EULER_YXZ
+        (out,yaw,pitch,roll) => roll.mulQuatNonAlloc(out, pitch,yaw),  // EULER_ZXY
+        (out,yaw,pitch,roll) => roll.mulQuatNonAlloc(out, yaw,pitch),  // EULER_ZYX
+    ];
 
+    w; v; // scalar, vector3
+    
 
     // (x,y,z) 오일러각으로부터 사원수를 생성합니다. 오일러각은 degree 로 나타냅니다.
-    static euler(rotation) {
+    // 회전의 순서(e.g. Y-X-Z, X-Y-Z, etc)는 rotationOrder 에 설정된 값을 따릅니다.
+    static euler(rotation, invert=false) {
         const x = rotation.x * deg2rad1_2;
         const y = rotation.y * deg2rad1_2;
         const z = rotation.z * deg2rad1_2;
@@ -1296,9 +1330,40 @@ export class Quaternion {
 
         const yaw   = new Quaternion(cosY, Vector3.up.mul(sinY) );
         const pitch = new Quaternion(cosX, Vector3.right.mul(sinX) );
-        const roll  = new Quaternion(cosZ, Vector3.back.mul(sinZ) );
+        const roll  = new Quaternion(cosZ, Vector3.forward.mul(sinZ) );
 
-        return yaw.mulQuat(pitch, roll);
+        const rotationOrder = GameEngine.rotationOrder;
+        const result        = Quaternion.#eulerFunc[rotationOrder](yaw, pitch, roll);
+
+        if(invert) {
+            return result.conjugate;
+        }
+        return result;
+    }
+
+
+    // 인자로 주어진 사원수 q 를 오일러각을 나타내는 Vector3 로 변환합니다.
+    static toEuler(q) {
+
+    }
+
+    
+    // 두 사원수를 선형보간(Linear intERPolation)합니다. qstart * (1-t) + qend * t 를 돌려줍니다.
+    // t 는 항상 0..1 사이의 값이어야 합니다. 해당 함수는 회전을 보간하는게 아님에 유의하시길 바랍니다.
+    // 사원수를 보간하는 것이며, 결과는 회전으로서 반영이 되지 않을 수 있습니다.
+    static lerp(qstart, qend, t) {
+        qstart = qstart.mulScalar(1-t); // qstart * (1-t)
+        qend   = qend.mulScalar(t);     // qend * t
+
+        const result = qstart.add(qend); // (qstart * (1-t)) + (qend * t)
+        return result.normalize();       // result / |result|
+    }
+
+
+    // 두 사원수를 구형보간(Spherical Linear intERPolation)합니다. qstart * (1-t) + qend * t 를 돌려줍니다.
+    // t 는 항상 0..1 사이의 값이어야 합니다.
+    static slerp(qstart, qend, t) {
+
     }
 
 
@@ -1337,7 +1402,7 @@ export class Quaternion {
     }
 
 
-    // 허수부를 w, 벡터부를 v 를 갖는 사원수를 생성합니다. 
+    // 허수부를 w, 벡터부를 v 를 갖는 회전 사원수를 생성합니다. 
     // 인자로 받은 v 는 clone() 를 사용하여 복사됩니다.
     // 기본값은 cos(0) + sin(0) * (0,1,0) 입니다.
     constructor(w=1,v=Vector3.zero) {
@@ -1397,6 +1462,39 @@ export class Quaternion {
 
         return ret;
     }
+
+
+    // 사원수 간의 덧셈을 수행합니다.
+    add(...args) {
+        let ret = this.clone();
+
+        for(const q of args) {
+            ret.w += q.w;
+            ret.v.addNonAlloc(ret.v, q.v);
+        }
+        return ret;
+    }
+
+
+    // 사원수에 스칼라를 곱합니다.
+    mulScalar(scalar) {
+        return new Quaternion(
+            this.w * scalar,
+            this.v.mul(scalar)
+        );
+    }
+
+
+    // 이 사원수를 정규화시킵니다. 결과는 this 를 돌려줍니다.
+    normalize() {
+        const size = 1/this.magnitude;
+
+        this.w *= size;
+        this.v.mulNonAlloc(this.v, size);
+
+        return this;
+    }
+
 
     // 사원수의 크기의 제곱 |q|^2 을 돌려줍니다.
     get sqrMagnitude() { return this.v.sqrMagnitude + this.w*this.w; }
@@ -1478,6 +1576,29 @@ export class Quaternion {
     }
 
 
+    // mulScalar() 와 같되, 결과를 out 에 저장합니다.
+    mulScalarNonAlloc(out, scalar) {
+        return out.assign(
+            this.w   * scalar,
+            this.v.x * scalar,
+            this.v.y * scalar,
+            this.v.z * scalar
+        );
+    }
+
+
+    // add() 와 같되, 결과를 out 에 저장합니다.
+    addNonAlloc(out, ...args) {
+        out.assignQuat(this);
+
+        for(const q of args) {
+            out.w += q.w;
+            out.v.addNonAlloc(out.v, q.v);
+        }
+        return out;
+    }
+
+
     // toMatrix4x4() 와 같되, 결과를 out 에 저장합니다.
     toMatrix4x4NonAlloc(out) {
         const right   = Quaternion.#temp6.assign(1, 0, 0);
@@ -1504,7 +1625,7 @@ export class Quaternion {
 
 
     // euler() 와 같되, 결과를 out 에 저장합니다.
-    static eulerNonAlloc(out, rotation) {
+    static eulerNonAlloc(out, rotation, invert=false) {
         const x = deg2rad1_2 * rotation.x;
         const y = deg2rad1_2 * rotation.y;
         const z = deg2rad1_2 * rotation.z;
@@ -1517,6 +1638,24 @@ export class Quaternion {
         const pitch = Quaternion.#temp1.assign(cosX, sinX, 0, 0);  // pitch = cosX + sinX * (1,0,0)
         const roll  = Quaternion.#temp2.assign(cosZ, 0, 0, -sinZ); // roll  = cosZ + sinZ * (0,0,-1) 
 
-        return yaw.mulQuatNonAlloc(out, pitch, roll); // out = roll * pitch * yaw 
+        const rotationOrder = GameEngine.rotationOrder;
+        const result        = Quaternion.#eulerNonAllocFunc[rotationOrder](out,yaw,pitch,roll);
+
+        if(invert) {
+            return result.conjugateNonAlloc(result);
+        }
+        return result;
+    }
+
+
+    // lerp() 와 같되, 결과를 out 에 저장합니다.
+    static lerpNonAlloc(out, qstart, qend, t) {
+        qstart = Quaternion.#temp0.assignQuat(qstart);
+        qend   = Quaternion.#temp1.assignQuat(qend);
+
+        qstart.mulScalarNonAlloc(qstart, (1-t));
+        qend.mulScalarNonAlloc(qend, t);
+
+        return qstart.addNonAlloc(out, qend);
     }
 };

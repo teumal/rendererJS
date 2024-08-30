@@ -36,6 +36,81 @@ const KeyState = {
     None     : 16,
 };
 
+export const RotationOrder = {
+    EULER_XYZ : 0, // R = roll * yaw * pitch
+    EULER_XZY : 1, // R = yaw * roll * pitch
+    EULER_YZX : 2, // R = pitch * roll * yaw
+    EULER_YXZ : 3, // R = roll * pitch * yaw (default)
+    EULER_ZXY : 4, // R = yaw * pitch * roll
+    EULER_ZYX : 5, // R = pitch * yaw * roll
+};
+
+export const WrapMode = {
+    Once         : 0, // 
+    Loop         : 1, // 
+    PingPong     : 2, // 
+    Default      : 3, // 
+    ClampForever : 4  // 
+};
+
+export const InterpolationType = {
+    Constant : (1 << 1), // 0x2. AnimationCurve.constant() 를 사용하여 보간합니다.
+    Linear   : (1 << 2), // 0x4. AnimationCurve.linear() 를 사용하여 보간합니다.
+    Cubic    : (1 << 3)  // 0x8. AnimationCurve.bezier() 를 사용하여 보간합니다.
+};
+
+export const TangentMode = {
+    Auto                    : (1 << 8),              // 0x100. Spline cardinal
+    TCB                     : (1 << 9),              // 0x200. Spline TCB (Tension, Continuity, Bias)
+    User                    : (1 << 10),             // 0x400. rightSlope == nextLeftSlope
+    Break                   : (1 << 11),             // 0x800. rightSlope != nextLeftSlope
+    GenericClamp            : (1 << 12),             // 0x1000. 
+    GenericTimeIndependent  : (1 << 13),             // 0x2000.
+    GenericClampProgressive : (1 << 14) | (1 << 13), // 0x6000.
+
+    AutoBreak     : (1 << 8) | (1 << 11),
+    AutoUserBreak : (1 << 8) | (1 << 10) | (1 << 11)
+};
+
+export const ConstantMode = {
+    Standard : 0,        // 0x0.
+    Next     : (1 << 2), // 0x100.
+};
+
+export const WeightedMode = {
+    Right    : (1 << 24), // 0x1000000. 우측 기울기(right tangent)의 가중치가 주어짐.
+    NextLeft : (1 << 25), // 0x2000000. 좌측 기울기(left tangent)의 가중치가 주어짐.
+};
+
+export const VelocityMode = {
+    Right    : (1 << 28),
+    NextLeft : (1 << 29)
+};
+
+export const KeyDataIndex = {
+    RightSlope       : 0, // 현재 키의 우측 접선의 기울기(the right derivative)의 인덱스 (TangentMode.User | TangentMode.Break | TangentMode.Auto)
+    NextLeftSlope    : 1, // 다음 키의 좌측 접선의 기울기(the left derivative)의 인덱스 (TangentMode.User | TangentMode.Break | TangentMode.Auto)
+    RightWeight      : 2, // 현재 키의 control point 의 x 값의 가중치의 인덱스 (WeightedMode.Right)
+    NextLeftWeight   : 3, // 다음 키의 control point 의 x 값의 가중치의 인덱스 (WeightedMode.NextLeft) 
+    RightVelocity    : 4, // 
+    NextLeftVelocity : 5, //
+
+    TCBTension       : 0, // Tension 값의 인덱스 (TangentMode.TCB)
+    TCBContinuity    : 1, // Continuity 값의 인덱스 (TangentMode.TCB)
+    TCBBias          : 2, // Bias 값의 인덱스 (TangentMode.TCB)
+};
+
+export const PropertyType = {
+    Quaternion : 0, // setter = (q)=>{...}, xcurve, ycurve, zcurve 를 인자로 필요로 합니다.
+    Vector2    : 1, // setter = (xy)=>{...}, xcurve, ycurve 를 인자로 필요로 합니다.
+    Vector3    : 2, // setter = (xyz)=>{...}, xcurve, ycurve, zcurve 를 인자로 필요로 합니다.
+    Vector4    : 3, // setter = (xyzw)=>{...}, xcurve, ycurve, zcurve, wcurve 를 인자로 필요로 합니다.
+    Number     : 4, // setter = (n)=>{...}, ncurve 를 인자로 필요로 합니다.
+};
+
+export const ktime2sec = 1/46186158000; // FBX 파일의 KTime 을 second 로 변환합니다.
+
+
 
 export class GameEngine {
     static #prevTimestamp = 0;
@@ -46,6 +121,9 @@ export class GameEngine {
 
     static #textQueue  = [];
     static #backBuffer = null;
+
+    static rotationOrder = RotationOrder.EULER_YXZ; // 기본 회전 순서는 yaw - pitch - roll
+
     $cvs; $ctx; 
 
     // 캔버스의 해상도를 설정합니다.
@@ -86,14 +164,6 @@ export class GameEngine {
         data[index+3] = color.a * 255;
     }
 
-
-    // `camera` 가 보고 있는 구역을 지워버립니다.
-    static clearCamera(camera) {
-       const screenSize = camera.screenSize;
-       this.$ctx.clearRect(0, 0, screenSize.x, screenSize.y);
-    }
-
-
     // 게임엔진을 초기화한 후, 씬을 실행합니다.
     static initialize() {
 
@@ -133,7 +203,6 @@ export class GameEngine {
             GameEngine.#curTimestamp  = t;
 
             // update() => animate() => render()
-            GameEngine.clearCamera(Camera.mainCamera);
             GameObject.update();
             GameObject.render();
 
@@ -240,7 +309,8 @@ export class Transform {
     
     #parent = null; // Transform
     #childs = [];   // Transform[]
-    
+
+
 
     // 오일러각을 사용하여 회전 행렬을 만들어냅니다.
     // `invert==true` 이면, 역행렬을 만들어냅니다.
@@ -316,7 +386,7 @@ export class Transform {
 
     // 인자로 주어진 `scale`, `rotation`, `position` 값을 통해
     // 모델링 행렬 `M` 을 만들어 돌려줍니다. 여기서 `rotation` 은
-    // 오일러각을 나타내는 Vector3 로 사용됩니다.
+    // Quaternion 입니다.
     static TRS(position, scale, rotation) {
 
         const S = new Matrix4x4(
@@ -325,7 +395,7 @@ export class Transform {
             new Vector4(0, 0, scale.z, 0),
             new Vector4(0, 0, 0, 1)
         );
-        const R = Quaternion.euler(rotation).toMatrix4x4();
+        const R = rotation.toMatrix4x4();
         const T = new Matrix4x4(
             new Vector4(1, 0, 0, 0),
             new Vector4(0, 1, 0, 0),
@@ -474,20 +544,28 @@ export class Transform {
 
 
     // 루트 트랜스폼을 생성합니다. 생성된 트랜스폼은 어떠한 부모나 자식도 가지고 있지 않습니다.
+    // rotation 은 Vector3 또는 Quaternion 을 인자로 줄 수 있습니다.
     constructor(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {
-        this.#localPosition = position.clone();           // Vector3
-        this.#localScale    = scale.clone();              // Vector3
-        this.#localRotation = Quaternion.euler(rotation); // Quaternion
-
-        this.#worldPosition = position.clone();            // Vector3
-        this.#worldScale    = scale.clone();               // Vector3
-        this.#worldRotation = this.#localRotation.clone(); // Quaternion
+        this.#localPosition = position.clone(); // Vector3
+        this.#localScale    = scale.clone();    // Vector3
+        
+        this.#worldPosition = position.clone(); // Vector3
+        this.#worldScale    = scale.clone();    // Vector3
+        
+        if(rotation.v == undefined) {
+            this.#localRotation = Quaternion.euler(rotation); // Quaternion
+            this.#worldRotation = this.#localRotation.clone(); // Quaternion
+        }
+        else {
+            this.#localRotation = rotation.clone(); // Quaternion
+            this.#worldRotation = rotation.clone(); // Quaternion
+        }
     }
 
 
     // 해당 트랜스폼을 나타내는 문자열을 돌려줍니다.
     toString() {
-       const localInfo = `\nlocalScale : ${this.#localScale}\n\nlocalRotation : ${this.#localRotation}\n\nlocalPosition : ${this.#localPosition}\n`;
+       const localInfo = `\nlocalScale : ${this.#localScale}\n\nlocalRotation : ${this.#localRotation}\n\nlocalPosition : ${this.#localPosition}\n\n`;
        const worldInfo = `\nworldScale : ${this.#worldScale}\n\nworldRotation : ${this.#worldRotation}\n\nworldPosition : ${this.#worldPosition}\n`;
        return localInfo+worldInfo;
     }
@@ -517,10 +595,17 @@ export class Transform {
     
 
     // `localScale`, `localRotation`, `localPosition` 를 한번에 설정합니다.
-    setLocalTransform(position, scale, rotation) {
+    // rotation 은 Vector3 또는 Quaternion 을 줄 수 있습니다.
+    setLocalTransform(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {
         this.#localScale.assignVector(scale);
         this.#localPosition.assignVector(position);
-        Quaternion.eulerNonAlloc(this.#localRotation, rotation);
+        
+        if(rotation.v == undefined) {
+            Quaternion.eulerNonAlloc(this.#localRotation, rotation);
+        }
+        else {
+            this.#localRotation.assignQuat(rotation);
+        }
         
         this.calculateWorld();
     }
@@ -558,11 +643,11 @@ export class Transform {
 
 
     // `localRotation` 을 수정하거나 얻습니다. `localTransform` 이 변경되므로, 자신과 자신의 모든
-    // 자식들의 `worldTransform` 은 수정됩니다. 인자는 오일러각을 나타내는 Vector3 입니다.
-    // 내부적으로는 회전행렬로서 저장됩니다. 이후에는 Quarternion 의 형태가 될 예정입니다.
+    // 자식들의 `worldTransform` 은 수정됩니다. 인자는 사원수입니다. 직관적인 인터페이스를 원한다면
+    // Quaternion.euler() 함수를 사용하시길 바랍니다.
     get localRotation() { return this.#localRotation.clone(); }
-    set localRotation(newRotation) { 
-        Quaternion.eulerNonAlloc(this.#localRotation, newRotation);
+    set localRotation(newQuat) { 
+        this.#localRotation.assignQuat(newQuat);
         this.calculateWorld();
     }
 
@@ -635,8 +720,8 @@ export class Transform {
     // `worldRotation` 을 얻습니다. `worldTransform` 이 변경되므로, 자신의 localTransform
     // 과 자신의 자식들의 localTransform 은 재계산되어야 합니다.
     get worldRotation() { return this.#worldRotation.clone(); }
-    set worldRotation(newRotation) {
-        Quaternion.eulerNonAlloc(this.#worldRotation, newRotation);
+    set worldRotation(newQuat) {
+        this.#worldRotation.assignQuat(newQuat);
         this.calculateLocal();
 
         for(const child of this.#childs) {
@@ -647,32 +732,6 @@ export class Transform {
     /***************
      * for optimizing
      ***************/
-
-    // euler() 와 같되, out 으로 결과를 출력합니다.
-    static eulerNonAlloc(out, localRotation, invert=false) {
-        const rotX = localRotation.x * MyMath.deg2rad;
-        const rotY = localRotation.y * MyMath.deg2rad;
-        const rotZ = localRotation.z * MyMath.deg2rad;
-
-        const sinX = Math.sin(rotX), cosX = Math.cos(rotX); // x축 회전에 쓰일 Sin, Cos 값
-        const sinY = Math.sin(rotY), cosY = Math.cos(rotY); // y축 회전에 쓰일 Sin, Cos 값
-        const sinZ = Math.sin(rotZ), cosZ = Math.cos(rotZ); // z축 회전에 쓰일 Sin, Cos 값
-
-        if(invert) {
-            out.basisX.assign(((cosY)*(cosZ))+((-sinY)*((-sinX)*(sinZ))), (cosX)*(sinZ), ((sinY)*(cosZ))+((cosY)*((-sinX)*(sinZ))), 0);
-            out.basisY.assign(((cosY)*(-sinZ))+((-sinY)*((-sinX)*(cosZ))), (cosX)*(cosZ), ((sinY)*(-sinZ))+((cosY)*((-sinX)*(cosZ))), 0);
-            out.basisZ.assign((-sinY)*(cosX), sinX, (cosY)*(cosX), 0);
-            out.basisW.assign(0, 0, 0, 1);
-        }
-        else {
-            out.basisX.assign(((cosZ)*(cosY))+((sinZ)*((-sinX)*(-sinY))), ((-sinZ)*(cosY))+((cosZ)*((-sinX)*(-sinY))), (cosX)*(-sinY), 0);
-            out.basisY.assign((sinZ)*(cosX), (cosZ)*(cosX), sinX, 0);
-            out.basisZ.assign(((cosZ)*(sinY))+((sinZ)*((-sinX)*(cosY))), ((-sinZ)*(sinY))+((cosZ)*((-sinX)*(cosY))), (cosX)*(cosY), 0);
-            out.basisW.assign(0, 0, 0, 1);
-        }
-        return out;
-    }
-
 
     // invTRS() 와 같되, 결과를 out 으로 출력합니다.
     static invTRSNonAlloc(out, position, scale, rotation) {
@@ -685,8 +744,8 @@ export class Transform {
         invS.basisZ.assign(0, 0, 1/scale.z, 0);
         invS.basisW.assign(0,0,0,1);
 
-        const q    = Quaternion.eulerNonAlloc(Transform.#temp0, rotation);
-        const invQ = q.conjugateNonAlloc(q); 
+        const q    = rotation;
+        const invQ = q.conjugateNonAlloc(Transform.#temp0); 
         invQ.toMatrix4x4NonAlloc(invR);
 
         invT.basisX.assign(1,0,0,0);
@@ -782,7 +841,7 @@ export class Transform {
         S.basisZ.assign(0, 0, scale.z, 0);
         S.basisW.assign(0, 0, 0, 1);
 
-        const q = Quaternion.eulerNonAlloc(Transform.#temp0, rotation);
+        const q = rotation;
         q.toMatrix4x4NonAlloc(R);
 
         T.basisX.assign(1, 0, 0, 0);
@@ -796,8 +855,10 @@ export class Transform {
 
 
 export class Camera {
-    static tileSize   = 20;
     static mainCamera = new Camera();
+
+    static tileSizeX = 20;
+    static tileSizeY = 20;
     
     transform = new Transform();
     screenSize;
@@ -825,8 +886,8 @@ export class Camera {
         const halfh = this.screenSize.y * 0.5;
 
         return new Vector2(
-            Math.round(worldPosition.x * Camera.tileSize + halfw),
-            Math.round(-worldPosition.y * Camera.tileSize+ halfh)
+            Math.round(worldPosition.x * Camera.tileSizeX + halfw),
+            Math.round(-worldPosition.y * Camera.tileSizeY + halfh)
         );
     }
 
@@ -837,8 +898,8 @@ export class Camera {
         const halfh = this.screenSize.y * 0.5;
 
         return new Vector2(
-            (screenPosition.x - halfw) / Camera.tileSize,
-            (-screenPosition.y + halfh) / Camera.tileSize
+            (screenPosition.x - halfw) / Camera.tileSizeX,
+            (-screenPosition.y + halfh) / Camera.tileSizeY
         );
     }
 
@@ -878,8 +939,8 @@ export class Camera {
 
     // NDC 좌표에 종횡비를 곱하여 화면 크기만큼 늘려줍니다.
     stretchNDC(p) {
-        const halfw = this.screenSize.x * 0.5 / Camera.tileSize;
-        const halfh = this.screenSize.y * 0.5 / Camera.tileSize;
+        const halfw = this.screenSize.x * 0.5 / Camera.tileSizeX;
+        const halfh = this.screenSize.y * 0.5 / Camera.tileSizeY;
         return new Vector4(p.x * halfw, p.y * halfh, p.z);
     }
 
@@ -1391,36 +1452,36 @@ export class BoxCollider {
 
 export class Bone {
     static renderer = null;
-
     static #temp0   = Matrix4x4.identity; // Matrix4x4
-    static #temp1   = Matrix4x4.identity; // Matrix4x4
     static #frustum = new Frustum();      // Frustum
 
-    bindPose       = null;  // 본의 최초 트랜스폼.
-    $transform     = null;  // 본의 트랜스폼.
-    $isDirty       = true;
-    #skeletalCache = Matrix4x4.identity;
-    #drawBoneCache = Matrix4x4.identity;
-    $bindPoseDirty = true;
+    #bindPose      = Matrix4x4.identity; // Matrix4x4. 본의 바인딩 포즈(root pose).
+    #invBindPose   = Matrix4x4.identity; // Matrix4x4. bindPose^(-1).
+    #bindPoseDirty = true;               // 본의 바인딩 포즈가 수정되었는지 여부.
 
+    #transform = null; // 본의 트랜스폼.
+    #isDirty   = true; // 본의 트랜스폼이 수정되었는지 여부.
+    
+    #skeletalCache = Matrix4x4.identity; // skeletal() 에서 캐싱된 행렬
+    #drawBoneCache = Matrix4x4.identity; // drawBone() 에서 캐싱된 행렬
+    
     #parent = null; // 자신의 부모 본
     #childs = [];   // 자신의 자식들의 목록
 
-    boneColor = new Color(1, 0.64, 0, 1); // 본의 색깔을 지정
+    boneColor = new Color(0.8, 0.8, 0.8, 1); // 본의 색깔을 지정
 
     // 루트 본을 생성합니다. 
-    constructor(position=Vector3.zero, scale=Vector3.one, rotation=Vector3.zero) {
-        this.bindPose = {
-            scale    : scale,    // Vector3
-            position : position, // Vector3
-            rotation : rotation  // Vector3
-        };
-        this.$transform = new Transform(position, scale, rotation);
+    constructor(position=Vector3.zero, scale=Vector3.one, rotation=new Quaternion() ) {
+        Transform.TRSNonAlloc(this.#bindPose, position, scale, rotation);
+        Transform.invTRSNonAlloc(this.#invBindPose, position, scale, rotation);
+
+        this.#transform = new Transform(position, scale, rotation);
 
         // 본을 표시하기 위한, 메시를 생성합니다. 최초 한번만 생성합니다.
         if(Bone.renderer==null) {
-            const renderer = Bone.renderer      = new Renderer();
-            const mesh     = Bone.renderer.mesh = new Mesh();
+            const renderer = Bone.renderer          = new Renderer();
+            const mesh     = Bone.renderer.mesh     = new Mesh();
+            const mat      = Bone.renderer.material = new Material();
 
             mesh.vertices = [
                 new Vector3(0,0,0),           // 0
@@ -1441,24 +1502,22 @@ export class Bone {
                 2,5,3, 0,0,0,
                 1,5,2, 0,0,0,
             ];
-            mesh.collider           = new BoxCollider(mesh);
-            renderer.wireFrameMode  = true;
+            mesh.collider  = new BoxCollider(mesh);
+            renderer.zTest = false;
         }
     }
 
     // 본의 스켈레탈 애니메이션을 적용하는 행렬을 돌려줍니다. 스켈레탈 애니메이션을 적용하기 위해,
-    // bindPose^(-1) 을 적용하여 로컬 공간으로 이동시킵니다. 이후, parent.worldTRS * this.localTRS
+    // bindPose^(-1) 을 적용하여 로컬 공간(bone space)으로 이동시킵니다. 이후, parent.worldTRS * this.localTRS
     // 을 적용하는 순서를 가집니다. skeletal() 함수는 한번 생성한 결과를 캐싱하며, 트랜스폼이 변경되었을 경우
     // 재생성합니다.
     skeletal() {
         
-        if(this.$isDirty) {
-            this.$isDirty = false;
-            const pose = this.bindPose;
+        if(this.#isDirty) {
+            this.#isDirty  = false;
+            const worldTRS = this.#transform.modelNonAlloc(Bone.#temp0);
 
-            const invBindPose = Transform.invTRSNonAlloc(Bone.#temp0, pose.position, pose.scale, pose.rotation);
-            const local       = this.$transform.modelNonAlloc(Bone.#temp1);
-            return invBindPose.mulMatNonAlloc(this.#skeletalCache, local);
+            this.#invBindPose.mulMatNonAlloc(this.#skeletalCache, worldTRS);
         }
         return this.#skeletalCache;
     }
@@ -1471,11 +1530,11 @@ export class Bone {
 
         if(parent != null) {
 
-            if(this.$bindPoseDirty) {
+            if(this.#bindPoseDirty) {
                 const pose0 = this.bindPose;
                 const pose1 = parent.bindPose;
 
-                const diff   = pose0.position.sub(pose1.position);
+                const diff   = pose0.basisW.sub(pose1.basisW).toVector3(); // basisW 는 translation 에 해당.
                 const length = diff.magnitude;
                 const lookAt = diff.normalized;
                 const up     = Vector3.up;
@@ -1497,11 +1556,17 @@ export class Bone {
                     new Vector4(0, 1, 0, 0),
                     new Vector4(0, 0, 1, 0),
                     diff.mul(-1).toVector4()
+                );
+                const T2 = new Matrix4x4(
+                    new Vector4(1,0,0,0),
+                    new Vector4(0,1,0,0),
+                    new Vector4(0,0,1,0),
+                    pose0.basisW
                 ); 
-                const pose = Transform.TRS(pose0.position, pose0.scale, pose0.rotation);
-                S.mulMatNonAlloc(this.#drawBoneCache, R, T, pose);
 
-                this.$bindPoseDirty = false;
+                S.mulMatNonAlloc(this.#drawBoneCache, R, T, T2);
+
+                this.#bindPoseDirty = false;
             }
             finalMat = this.#drawBoneCache.mulMatNonAlloc(Bone.#temp0, finalMat);
 
@@ -1510,8 +1575,7 @@ export class Bone {
             if(Bone.renderer.mesh.collider.checkBoundFrustum(frustum) == Bound.Outside) {
                 return;
             }
-
-            Bone.renderer.wireFrameColor = this.boneColor;
+            Bone.renderer.material.fragmentShader = (uv,pos)=>{ return this.boneColor;}
             Bone.renderer.drawMesh(finalMat);
         }
     }
@@ -1523,7 +1587,7 @@ export class Bone {
 
         if(index < 0) {
             this.#childs.push(bone);
-            this.$transform.addChild(bone.$transform);
+            this.#transform.addChild(bone.#transform);
             bone.#parent = this;
         }
     }
@@ -1535,7 +1599,7 @@ export class Bone {
 
         if(index > -1) {
             this.#childs.splice(index,1);
-            this.$transform.removeChild(bone.$transform);
+            this.#transform.removeChild(bone.#transform);
             bone.#parent = null;
         }
     }
@@ -1544,8 +1608,8 @@ export class Bone {
     // 본의 트랜스폼이 수정되었음을 모든 자식들에게 알립니다.
     // 모든 자식 본들 또한 isDirty = true; 가 됩니다.
     #setDirty() {
-        if(this.$isDirty == false) {
-            this.$isDirty = true;
+        if(this.#isDirty == false) {
+            this.#isDirty = true;
 
             for(let i=0; i<this.#childs.length; ++i) {
                 const child = this.#childs[i];
@@ -1567,30 +1631,467 @@ export class Bone {
         }
     }
 
-    // 본의 회전량을 수정하거나 얻습니다.
-    get localRotation() { return this.$transform.localRotation; }
+    // 본의 공간(bone space)에서 회전량을 수정하거나 얻습니다.
+    get localRotation() { return this.#transform.localRotation; }
     set localRotation(newRotation) {
         this.#setDirty();
-        this.$transform.localRotation = newRotation;
+        this.#transform.localRotation = newRotation;
     }
 
-    // 본의 크기를 수정하거나 얻습니다.
-    get localScale() { return this.$transform.localScale; }
+    // 본의 공간(bone space)에서 크기를 수정하거나 얻습니다.
+    get localScale() { return this.#transform.localScale; }
     set localScale(newScale) {
         this.#setDirty();
-        this.$transform.localScale = newScale;
+        this.#transform.localScale = newScale;
     }
 
-    // 본의 위치를 수정하거나 얻습니다.
-    get position() { return this.$transform.position; }
+    // 본의 공간(bone space)에서 위치를 수정하거나 얻습니다.
+    get position() { return this.#transform.position; }
     set position(newPosition) {
         this.#setDirty();
-        this.$transform.position = newPosition;
+        this.#transform.position = newPosition;
+    }
+
+    // 월드 공간(world space)에서 회전량을 수정하거나 얻습니다.
+    get worldRotation() { return this.#transform.worldRotation; }
+    set worldRotation(newRotation) {
+        this.#setDirty();
+        this.#transform.worldRotation = newRotation;
+    }
+    
+    // 월드 공간(world space)에서 크기를 수정하거나 얻습니다.
+    get worldScale() { return this.#transform.worldScale; }
+    set worldScale(newScale) {
+        this.#setDirty();
+        this.#transform.worldScale = newScale;
+    }
+
+    // 월드 공간(world space)에서 위치를 수정하거나 얻습니다.
+    get worldPosition() { return this.#transform.worldPosition; }
+    set worldPosition(newPosition) {
+        this.#setDirty();
+        this.#transform.worldPosition = newPosition;
+    }
+
+    // 바인딩 포즈를 얻거나 수정합니다. 
+    get bindPose() { return this.#bindPose.clone(); }
+    set bindPose(newBindPose=Matrix4x4.identity) {
+        this.#bindPoseDirty = true;
+        
+        this.#bindPose.assign(newBindPose);
+        this.#invBindPose.assign(newBindPose.inverse() );
     }
 };
 
-export class Animator {
+export class AnimationCurve {
+    static #temp0    = Vector2.zero;
+    static #temp1    = Vector2.zero;
+    static #color    = new Color(0,1,0,0.3);
+    static #renderer = new Renderer();
 
-    // todo..
-    // for fbx.h
+    #splines = null;      // 
+    #samples = null;      // 
+    #xMax    = -Infinity; // 
+    #yMax    = -Infinity; // 
+
+    wrapMode = WrapMode.Loop; // 
+   
+
+    // p0,p3 을 endpoint 로 사용하고, p1,p2 를 control point 로 사용하는
+    // CubicBezierSpline 을 돌려줍니다. tangent0, tangent1 은 각각 접선
+    // p0p1, p2p3 의 기울기(slope) 이며, f(x) = ax + b 에서 b 값을 구하기 위해
+    // 사용됩니다. weight0, weight1 은 p1.x, p2.x 를 구하기 위해서 사용됩니다.
+    static bezier(p0,p3, tangent0, tangent1, weight0, weight1) {
+        const xDist    = Math.abs(p0.x - p3.x); // |x0-x3|
+        const invXDist = 1 / xDist;             // 1 / |x0-x3|
+
+        const p0x = p0.x, p0y = p0.y;
+        const p3x = p3.x, p3y = p3.y;
+
+        const p1x = p0x + xDist*weight0,     p1y = tangent0 * p1x + (p0y - tangent0*p0x);
+        const p2x = p0x + xDist*(1-weight1), p2y = tangent1 * p2x + (p3y - tangent1*p3x);
+
+        const ycurve = {                      // x(t) = (1-t)^3·x0 + 3t(1-t)^2·x1 + 3t^2(1-t)·x2 + t^3·x3
+            a: (-p0y + 3*p1y - 3*p2y + p3y),  // x(t) = at^3 + bt^2 + ct + d
+            b: (3*p0y - 6*p1y + 3*p2y),       //
+            c: (-3*p0y + 3*p1y),              // (1-t)^3 = -t^3 + 3t^2 - 3t + 1
+            d: p0y                            // (1-t)^2 = t^2 - 2t + 1
+        };                                    //
+        const xcurve = {                      // a = (-x0 + 3x1 - 3x2 + x3)
+            a: (-p0x + 3*p1x - 3*p2x + p3x),  // b = (3x0 - 6x1 + 3x2)
+            b: (3*p0x - 6*p1x + 3*p2x),       // c = (-3x0 + 3x1)
+            c: (-3*p0x + 3*p1x),              // d = x0
+            d: p0x 
+        };
+
+        return {
+            getX: function(t) {
+                t = (t-p0x) * invXDist;
+                const tt = t*t, ttt = tt*t;
+                return xcurve.a*ttt + xcurve.b*tt + xcurve.c*t + xcurve.d; // at^3 + bt^2 + ct + d
+            },
+            getY: function(t) {
+                t = (t-p0x) * invXDist;
+                const tt = t*t, ttt = tt*t;
+                return ycurve.a*ttt + ycurve.b*tt + ycurve.c*t + ycurve.d // at^3 + bt^2 + ct + d
+            },
+            p0   : p0.clone(),            // endpoint 0
+            p1   : p3.clone(),            // endpoint 1,
+            cp0  : new Vector2(p1x, p1y), // control point 0
+            cp1  : new Vector2(p2x, p2y), // control point 1
+        };
+    }
+
+
+    // p0,p1 을 endpoint 로 사용하여, 선형보간하는 LinearSpline 을 돌려줍니다.
+    static linear(p0,p1) {
+        const x0 = p0.x, y0 = p0.y;
+        const x1 = p1.x, y1 = p1.y;
+                                     
+        const a = (y0-y1) / (x0-x1); // y0 = a*x0 + b
+        const b = y0 - a*x0;         // y1 = a*x1 + b
+                                     // (y0-y1) = a * (x0-x1)
+                                     // (y0-y1) / (x0-x1) = a
+        return {
+            getX: function(t) { return t; },
+            getY: function(t) { return a*t + b; }, // a*t + b
+            p0: p0.clone(),
+            p1: p1.clone()
+        };
+    }
+
+
+    // p0,p1 을 endpoint 로 사용하여, 다음 키까지 키의 값이 변하지 않는 ConstantSpline 을 돌려줍니다.
+    static constant(p0,p1) {
+        const y = p0.y;
+
+        return {
+            getX: function(t) { return t; },
+            getY: function(t) { return y; },
+            p0: p0.clone(),
+            p1: p1.clone()
+        };
+    }
+
+
+    // FBX 파일의 AnimationCurve 노드의
+    static fromFBXAnimCurve(keyTime, keyValue, keyAttrFlags, keyAttrData, keyAttrRefCount) {
+        const length  = keyTime.length;
+        const splines = [];
+        
+        let refCount  = keyAttrRefCount[0];
+        let dataIndex = 0;
+
+        keyTime.push(keyTime[length-1]+1);
+        keyValue.push(keyValue[0]);
+
+        for(let i=0; i<length; ++i) {
+            const p0         = new Vector2(keyTime[i] * ktime2sec, keyValue[i]);
+            const p1         = new Vector2(keyTime[i+1] * ktime2sec, keyValue[i+1]);
+            const flag       = keyAttrFlags[dataIndex];
+            const startIndex = 4*dataIndex;
+
+            if(refCount-- == 0) {
+                refCount = keyAttrRefCount[++dataIndex];
+            }
+
+            if(flag & InterpolationType.Constant) {
+                splines.push(AnimationCurve.constant(p0,p1) );
+            }
+            else if(flag & InterpolationType.Linear) {
+                splines.push(AnimationCurve.linear(p0,p1) );
+            }
+            else if(flag & InterpolationType.Cubic) {
+                let rightSlope     = 0;
+                let nextLeftSlope  = 0;
+                let rightWeight    = 0.333;
+                let nextLeftWeight = 0.333;
+
+                if(flag & TangentMode.TCB) {
+                    const tension    = keyAttrData[startIndex + KeyDataIndex.TCBTension];
+                    const continuity = keyAttrData[startIndex + KeyDataIndex.TCBContinuity];
+                    const bias       = keyAttrData[startIndex + KeyDataIndex.TCBBias];
+                }
+                
+                if(flag & TangentMode.AutoUserBreak) {
+                    rightSlope    = keyAttrData[startIndex + KeyDataIndex.RightSlope];
+                    nextLeftSlope = keyAttrData[startIndex + KeyDataIndex.NextLeftSlope];
+                }
+                
+                if(flag & WeightedMode.Right)    rightWeight    = keyAttrData[startIndex + KeyDataIndex.RightWeight];
+                if(flag & WeightedMode.NextLeft) nextLeftWeight = keyAttrData[startIndex + KeyDataIndex.NextLeftWeight];
+
+                splines.push(AnimationCurve.bezier(p0,p1,rightSlope,nextLeftSlope,rightWeight,nextLeftWeight) );
+            }
+        }
+        return new AnimationCurve(splines);
+    }
+
+
+    // 인자로 받은 spline 들의 배열로 곡선(Curve)을 하나 정의합니다.
+    constructor(splines) { this.#splines = splines; }
+
+
+    // 그래프를 그리는데 사용할 샘플(sample, Vector2)들을 구합니다.
+    #getSamples() {
+        this.#samples = [];
+
+        for(let i=0; i<this.#splines.length; ++i) {
+            const spline = this.#splines[i];
+            const p0     = spline.p0;
+            const p1     = spline.p1;
+            const step   = Math.abs(p0.x-p1.x) * 0.01; // spline 하나 당 100 개의 샘플을 추출한다.
+
+            for(let t=p0.x; t<=p1.x; t+=step) {
+                const x = spline.getX(t);
+                const y = spline.getY(t);
+
+                const absX = Math.abs(x);
+                const absY = Math.abs(y);
+
+                if(absX > this.#xMax) this.#xMax = absX;
+                if(absY > this.#yMax) this.#yMax = absY;
+
+                this.#samples.push(new Vector2(x,y) );
+            }
+        }
+
+        if(MyMath.equalApprox(this.#xMax, 0)) this.#xMax = Math.EPSLION;
+        if(MyMath.equalApprox(this.#yMax, 0)) this.#yMax = Math.EPSLION;
+    }
+
+
+    // t 초 일때의 y 값을 돌려줍니다. t 의 값은 [0..xMax] 이며, 범위를 벗어날 경우
+    // wrapMode 에 따라
+    evaluate(t) {
+        t %= this.xMax;
+
+        const spline = this.#splines.find((spline)=>t <= spline.p1.x);
+        return spline.getY(t);
+    }
+
+
+    // 
+    drawGizmo2D() {
+        const renderer   = AnimationCurve.#renderer;
+        const tileSizeX  = Camera.tileSizeX;
+        const tileSizeY  = Camera.tileSizeY;
+        const screenSize = renderer.camera.screenSize; 
+
+        Camera.tileSizeX = screenSize.x * 0.48;
+        Camera.tileSizeY = screenSize.y * 0.48;
+
+        renderer.drawGizmo2D();
+
+        Camera.tileSizeX = tileSizeX; // restore tileSizeX
+        Camera.tileSizeY = tileSizeY; // restore tileSizeY
+    }
+
+
+    // 곡선을 그립니다. 항상 [0,1] 사이로 정규화되어 그려집니다.
+    drawCurve(color=Color.red, loop=0) {
+        const renderer   = AnimationCurve.#renderer;
+        const tileSizeX  = Camera.tileSizeX;
+        const tileSizeY  = Camera.tileSizeY;
+        const screenSize = renderer.camera.screenSize; 
+        const radius     = 0.005;
+
+        Camera.tileSizeX = screenSize.x * 0.48;
+        Camera.tileSizeY = screenSize.y * 0.48;
+
+        // 각 spline 들의 샘플을 구해서, 캐싱한다.
+        if(this.#samples == null) {
+            this.#getSamples();
+        }
+
+        const xMax  = 1 / (this.#xMax * ++loop);
+        const yMax  = 1 / (this.#yMax);
+        let   xStep = 0;
+        
+        
+        // 곡선을 그린다. 곡선의 x, y 값은 항상 [0,1] 범위의 값으로
+        // 정규화된다.
+        for(let i=0; i<loop; ++i, xStep += this.#xMax) {
+
+            // 현재 spline 이 bezier 일 경우, control point 도 표시한다.
+            for(let i=0; i<this.#splines.length; ++i) {
+
+                if(this.#splines[i].cp0 != undefined) {
+                    const cp0 = AnimationCurve.#temp0.assignVector(this.#splines[i].cp0);
+                    const cp1 = AnimationCurve.#temp1.assignVector(this.#splines[i].cp1);
+
+                    cp0.x = (cp0.x + xStep) * xMax; cp0.y *= yMax;
+                    cp1.x = (cp1.x + xStep) * xMax; cp1.y *= yMax;
+
+                    renderer.drawLine2D(cp0, cp1, AnimationCurve.#color);
+                }
+            }
+
+            // 캐싱된 샘플들을 그려준다.
+            for(let i=0; i<this.#samples.length-1; ++i) {
+                const from = AnimationCurve.#temp0.assignVector(this.#samples[i]);
+                const to   = AnimationCurve.#temp1.assignVector(this.#samples[i+1]);
+
+                from.x = (from.x + xStep) * xMax; from.y *= yMax;
+                to.x   = (to.x + xStep) * xMax;   to.y   *= yMax;
+    
+                renderer.drawLine2D(from,to,color);
+            }
+
+
+            // 키프레임들을 그려준다.
+            for(let i=0; i<this.#splines.length; ++i) {
+                const p0 = AnimationCurve.#temp0.assignVector(this.#splines[i].p0);
+                const p1 = AnimationCurve.#temp1.assignVector(this.#splines[i].p1);
+
+                p0.x = (p0.x + xStep) * xMax; p0.y *= yMax;
+                p1.x = (p1.x + xStep) * xMax; p1.y *= yMax;
+
+                renderer.drawArc2D(p0, radius);
+                renderer.drawArc2D(p1, radius);
+            }
+        }
+
+        Camera.tileSizeX = tileSizeX; // restore tileSizeX
+        Camera.tileSizeY = tileSizeY; // restore tileSizeY
+    }
+
+    // drawCurve() 함수로 그린 곡선 위에 점을 찍습니다.
+    // 찍은 점은 (t, evaluate(t) ) 의 점입니다.
+    drawPoint(t, color=Color.blue, loop=0) {
+        const renderer   = AnimationCurve.#renderer;
+        const tileSizeX  = Camera.tileSizeX;
+        const tileSizeY  = Camera.tileSizeY;
+        const screenSize = renderer.camera.screenSize; 
+        const radius     = 0.005;
+
+        Camera.tileSizeX = screenSize.x * 0.48;
+        Camera.tileSizeY = screenSize.y * 0.48;
+
+        // 각 spline 들의 샘플을 구해서, 캐싱한다.
+        if(this.#samples == null) {
+            this.#getSamples();
+        }
+
+        t %= this.xMax * ++loop;
+
+        const xMax  = (this.#xMax * loop);
+        const yMax  = (this.#yMax);
+
+        const p = new Vector2(
+            t / xMax, 
+            this.evaluate(t) / yMax 
+        );
+        renderer.drawArc2D(p, radius, color);
+
+        Camera.tileSizeX = tileSizeX; // restore tileSizeX
+        Camera.tileSizeY = tileSizeY; // restore tileSizeY
+    }
+
+
+    // 그래프의 x 값의 최댓값 |x| 을 얻습니다. 결과는 항상 절댓값입니다. 
+    get xMax() {
+        if(this.#samples == null) {
+            this.#getSamples();
+        }
+        return this.#xMax;
+    }
+
+    // 그래프의 y 값의 최댓값 |y| 을 얻습니다. 결과는 항상 절댓값입니다.
+    get yMax() {
+
+        if(this.#samples == null) {
+            this.#getSamples();
+        }
+        return this.#yMax;
+    }
+};
+
+
+export class AnimationState {
+    props = {};
+    name  = "";
+
+
+    // 두 AnimationState 를 보간합니다. 
+    static lerp(stateStart, stateEnd, t) {
+        
+    }
+
+    constructor(stateName) {
+        this.name = stateName; 
+    }
+
+
+    // 애니메이션을 적용할 속성(property)을 하나 추가합니다.
+    // type   : PropertyType 으로 속성의 타입을 지정하고, 정해진 갯수의 인자를 줘야 합니다.
+    //
+    // setter : 실제 property 에 값을 세팅하는 함수입니다. type 에 맞는 인자를 하나 받고, 세팅한 결과를 반환해야 합니다.
+    //          setter 의 반환값(return value)은 애니메이션을 보간하는데 사용되며, setter 의 참조로 같은 property 인지를 구분함에 유의해야 합니다.
+    //
+    // curves : AnimationCurve 입니다. type 에 따라 주어야할 갯수가 달라집니다.
+    addProperty(type, setter, ...curves) {
+        this.props[setter] = {
+            setter : setter,
+            type   : type,
+            curves : curves
+        };
+        return setter;
+    }
+
+
+    // 시간 t 에 따라 속성(property)들의 값을 갱신합니다.
+    update(t) {
+
+        for(const key in this.props) {
+            const prop = this.props[key];
+
+            switch(prop.type) {
+
+                case PropertyType.Quaternion: {
+                    const x = prop.curves[0].evaluate(t);
+                    const y = prop.curves[1].evaluate(t);
+                    const z = prop.curves[2].evaluate(t);
+
+                    prop.setter(Quaternion.euler(new Vector3(x,y,z)) );
+                    break;
+                }
+                case PropertyType.Vector2: {
+                    const x = prop.curves[0].evaluate(t);
+                    const y = prop.curves[1].evaluate(t);
+                    
+                    prop.setter(new Vector2(x,y));
+                    break;
+                }
+                case PropertyType.Vector3: {
+                    const x = prop.curves[0].evaluate(t);
+                    const y = prop.curves[1].evaluate(t);
+                    const z = prop.curves[2].evaluate(t);
+
+                    prop.setter(new Vector3(x,y,z));
+                    break;
+                }
+                case PropertyType.Vector4: {
+                    const x = prop.curves[0].evaluate(t);
+                    const y = prop.curves[1].evaluate(t);
+                    const z = prop.curves[2].evaluate(t);
+                    const w = prop.curves[3].evaluate(t);
+
+                    prop.setter(new Vector4(x,y,z,w));
+                    break;
+                }
+                case PropertyType.Number: {
+                    const num = prop.curves[0].evaluate(t);
+
+                    prop.setter(num);
+                    break;
+                }
+            }
+        }
+    }
+};
+
+
+export class Animator {
+    
 };

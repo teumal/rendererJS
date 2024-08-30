@@ -51,7 +51,7 @@ MyMath 에 NonAlloc 버전의 함수들을 추가.
 
 **EDIT 24/7/29**: Quaternion 클래스 추가. 잡다한 버그 수정. 이후 "fbx.h" 와 Animator 등이 추가될 예정.
 
-***EDIT 24/8/30*: AnimationState, AnimationCurve, RotationOrder 등 fbx.h 를 위한 다양한 기능이 추가되었습니다. 이 기능들이 모두 완성된 것은 아니지만, 중간 커밋을 위해
+***EDIT 24/8/30**: AnimationState, AnimationCurve, RotationOrder 등 fbx.h 를 위한 다양한 기능이 추가되었습니다. 이 기능들이 모두 완성된 것은 아니지만, 중간 커밋을 위해
 업데이트 합니다. 사용법에 대한 설명은 아래 Example 을 참고하시길 바랍니다. 또한 Transform.invTRSNonAlloc 에서 Quaternion.conjugateNonAlloc 이 잘못되는 버그가
 수정되었습니다.
 

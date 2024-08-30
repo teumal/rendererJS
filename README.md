@@ -490,7 +490,7 @@ animState.addProperty(
 ```
 위 예제는 `"rp_nathan_animated_003_walking_shoulder_l"` 라는 이름의 본(bone)의 localRotation 속성을 추가합니다. <br>
 회전은 `Quaternion` 으로 다루기에, `AnimationState.addProperty` 의 첫 인자에 `PropertyType.Quaternion` 을 주었습니다. <br>
-`Quaternion` 은 내부적으로 `Quaternion.euler()` 함수를 사용하기 때문에, yaw, pitch, roll 의 회전 각도를 의미하는 <br>
+`ProperType.Quaternion` 은 내부적으로 `Quaternion.euler()` 함수를 사용하기 때문에, yaw, pitch, roll 의 회전 각도를 의미하는 <br>
 x, y, z 에 대한 곡선이 3개가 필요합니다. 그렇기에 위 예제에서는 2,3,4 번째 인자에 `AnimationCurve` 를 전달해주었습니다. <br>
 
 `AnimationState` 는 시간 `t` 에 따라, 곡선에서 `y` 값을 얻어오며 `Quaternion.euler(new Vector3(x,y,z))` 의 결과를 <br>
@@ -509,6 +509,51 @@ x, y, z 에 대한 곡선이 3개가 필요합니다. 그렇기에 위 예제에
 
 아직 모든 기능이 완성되지 않아, 설명은 이 정도까지만 하지만 `setter` 는 이후에 애니메이션 전환을 위해 사용될 예정입니다. <br>
 `setter` 의 참조가 곧 하나의 property 로 사용될 예정이며, 이후에 `Animator` 가 추가될 때 추가적인 사용법이 정해질 예정입니다. <br>
+
+이렇게 애니메이션에 사용할 속성(property)들을 추가했다면, `AnimationState.update(t)` 함수를 사용하여 애니메이션을 갱신할 수 있습니다: <br>
+
+``` js
+let t = 0;
+
+// update function example
+man.update = ()=>{
+	const deltaTime     = GameEngine.deltaTime;
+	const rotSpeed      = deltaTime * 360;
+	const moveSpeed     = deltaTime * 40;
+	let   rotationDirty = false;
+	let   positionDirty = false;
+
+	animState.update(t); // 애니메이션 갱신!
+	t += deltaTime;
+
+	if(GameEngine.getKeyUp(KeyCode.Alpha1)) man.renderer.wireFrameMode = !man.renderer.wireFrameMode;
+	if(GameEngine.getKeyUp(KeyCode.Alpha2)) manMesh.boneVisible        = !manMesh.boneVisible;
+
+	if (GameEngine.getKey(KeyCode.Left))  { rotation.y += rotSpeed; rotationDirty = true; }
+	if (GameEngine.getKey(KeyCode.Right)) { rotation.y -= rotSpeed; rotationDirty = true; }
+	if (GameEngine.getKey(KeyCode.Up))    { rotation.x += rotSpeed; rotationDirty = true; }
+	if (GameEngine.getKey(KeyCode.Down))  { rotation.x -= rotSpeed; rotationDirty = true; }
+
+	if (GameEngine.getKey(KeyCode.W)) { position.z += moveSpeed; positionDirty = true; }
+	if (GameEngine.getKey(KeyCode.S)) { position.z -= moveSpeed; positionDirty = true; }
+	if (GameEngine.getKey(KeyCode.A)) { position.y -= moveSpeed; positionDirty = true; }
+	if (GameEngine.getKey(KeyCode.D)) { position.y += moveSpeed; positionDirty = true; }
+
+	if(positionDirty) {
+		man.transform.position = position;
+	}
+	if(rotationDirty) {
+		man.transform.localRotation = Quaternion.euler(rotation);
+	}
+	GameEngine.drawText(`deltaTime: ${deltaTime}`, 20, 20);
+	GameEngine.drawText(`position : ${position}`, 20, 30);
+	GameEngine.drawText(`rotation : ${rotation}`, 20, 40);
+	GameEngine.drawText(`boneVisible : ${manMesh.boneVisible}`, 20, 50); 
+	GameEngine.drawText(`wireFrameMode : ${man.renderer.wireFrameMode}`, 20, 60);
+};
+```
+`t` 는 시간을 의미하며, `GameEngine.deltaTime` 만큼 계속 값이 증가합니다. 지금은 이렇게 직접 애니메이션을 <br>
+갱신하지만, 이후에 `Animator` 가 추가되면, 단순히 `Animator.play("Walk")` 를 통해 숨길 예정입니다.
 
 이제 새로운 예제인 `man.js` 를 보도록 하겠습니다. 위 예제는 단순히 걷는 남성을 렌더링합니다:
 

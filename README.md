@@ -452,7 +452,7 @@ KeyAttrRefCount : 한 flag 를 몇 개의 key 들이 공유하는지 갯수가 �
 여기서 중요한 것은 KeyAttrFlags 인데, GameEngine.js 에 추가된 `InterpolationType`, `TangentMode`, `WeightedMode` 등의 열거형 타입들은 모두 `AnimationCurve.fromFBXAnimCurve()` 를 위해 추가된 것이기 때문입니다. <br>
 
 다음으로 `AnimationState` 를 보도록 하겠습니다. 이름은 Unity 의 AnimationState 를 참고했습니다. 그렇기에 해당 클래스는 하나의 애니메이션을 정의하는데 사용됩니다. <br>
-사용 게임 엔진들에서 애니메이션을 정의할 때, `localScale`, `localRotation` 등의 property 들을 추가하여, 시간 `t` 에 따라 값을 수정해나가는 것과 마찬가지로 <br>
+상용 게임 엔진들에서 애니메이션을 정의할 때, `localScale`, `localRotation` 등의 property 들을 추가하여, 시간 `t` 에 따라 값을 수정해나가는 것과 마찬가지로 <br>
 `AnimationState.addProperty` 를 사용하여 각 속성들을 수정해나갑니다:
 
 ``` js

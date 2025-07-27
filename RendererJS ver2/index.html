@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example</title>
+    <style>
+        html, body, canvas {
+            width: 100%;
+            height:100%;
+            padding:0;
+            margin:0;
+        }
+        canvas {
+            image-rendering: pixelated;
+            position : absolute;
+        }
+        input {
+            position : absolute;
+            padding-left : 10px;
+            padding-right : 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <span>Upload PNG </span><input type="file" multiple="true" id="textureInput"><br>
+    <span>Upload PMX </span> <input type="file" id="pmxInput"><br>
+    <span>Upload FBX </span> <input type="file" id="fbxInput"><br>
+    <script type="module" src="./example0.js"></script>
+</body>
+</html>

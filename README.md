@@ -14,7 +14,7 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 
 현재 RendererJS ver2 는 이전에 만들었던 버전을 리팩토링(refactoring)한 것입니다. 
 
-# to-do
+### to-do
 - `AnimationState`, `Animator` 완성하기
 - `FBXAnimCurve.createAnimationCurve()` 완성하기
 - `Deformer.blend()`, `Deformer.spherical()` 완성하기

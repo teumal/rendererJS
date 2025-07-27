@@ -12,8 +12,7 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 
 **Documentation**: https://www.notion.so/RendererJS-1f83ffee6f498052874bf7ff891dce93 <br><br>
 
-현재 RendererJS ver2 는 이전에 만들었던 버전을 리팩토링(refactoring)한 것입니다. 이전 버전과 다르게 모듈(module)들을 체계적으로<br>
-나누었습니다.
+현재 RendererJS ver2 는 이전에 만들었던 버전을 리팩토링(refactoring)한 것입니다. 
 
 ## Tutorial
 캐릭터를 렌더링하기 전에, 가장 먼저 해야 할일은 `GameEngine` 을 초기화하여, 렌더러를 사용하기 위한 환경을 만드는 일입니다. <br>

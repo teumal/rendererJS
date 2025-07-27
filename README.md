@@ -14,6 +14,18 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 
 현재 RendererJS ver2 는 이전에 만들었던 버전을 리팩토링(refactoring)한 것입니다. 
 
+# to-do
+- `AnimationState`, `Animator` 완성하기
+- `FBXAnimCurve.createAnimationCurve()` 완성하기
+- `Deformer.blend()`, `Deformer.spherical()` 완성하기
+- `Quaternion.toEuler()` 완성하기
+- `vmd.js` 완성하기
+- `FBXFile.createMaterials()` 완성하기
+- `FBXMesh.getElement()` 에서 `ByEdge` 의 경우를 추가하기
+- `PMXMorph` 추가하기
+- `FBXGlobalSettings` 완성하기
+- 
+
 ## Tutorial
 캐릭터를 렌더링하기 전에, 가장 먼저 해야 할일은 `GameEngine` 을 초기화하여, 렌더러를 사용하기 위한 환경을 만드는 일입니다. <br>
 이를 위해 다음 코드를 작성해줍시다:

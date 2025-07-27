@@ -37,10 +37,11 @@ main.zNear = 1;
 main.zFar  = 5000;
 ```
 
-맨 위의 문장(step-by-step)부터 살펴보도록 하겠습니다. `Texture.useWorker = true;` 는 background thread 에서 텍스처 파일을 로드하기 <br>
-위해서 사용됩니다. 크기가 큰 이미지 파일들(e.g. 2024 x 2024)을 연달아 로드하는 작업이 main thread 에서 이루어지면, 웹페이지가 잠시 <br> 
-작동하지 않을 수 있습니다. 비동기 함수(e.g. `Promise`)는 작업을 잠시 미루는 것 뿐이지 결국에는 main thread 에서 진행되니까요. <br> 
-JS 에서 스레딩(Threading)을 사용할 수 있는 것은 오직 `Worker` API 를 사용하는 방법 뿐입니다. `Texture.useWorker = true` 로 설정하면 <br>
+맨 위의 문장(step-by-step)부터 살펴보도록 하겠습니다. `Texture.useWorker = true;` 는 background thread <br>
+에서 텍스처 파일을 로드하기 위해서 사용됩니다. 크기가 큰 이미지 파일들(e.g. 2024 x 2024)을 연달아 로드하는 <br>
+작업이 main thread 에서 이루어지면, 웹페이지가 잠시 작동하지 않을 수 있습니다. 비동기 함수(e.g. `Promise`) <br>
+는 작업을 잠시 미루는 것 뿐이지 결국에는 main thread 에서 진행되니까요. JS 에서 스레딩(Threading)을 사용할 <br>
+수 있는 것은 오직 `Worker` API 를 사용하는 방법 뿐입니다. `Texture.useWorker = true` 로 설정하면 <br>
 `TextureWorker.js` 가 활성화되어, 웹페이지가 프리징(freezing)에 걸리는 것을 방지할 수 있습니다:
 
 <img src="https://file.notion.so/f/f/fe6e2013-3ec2-466b-a297-5e801e33afd0/916507d0-ec2e-4a07-85b9-b14579834a5b/%EB%85%B9%ED%99%94_2025_06_24_13_51_07_509.gif?table=block&id=21c3ffee-6f49-8014-84d5-c1333bb49190&spaceId=fe6e2013-3ec2-466b-a297-5e801e33afd0&expirationTimestamp=1753646400000&signature=eHcwrbJq5SnDrUg_8lH8i-HTCZ1TFOWH4R9qzpyNmq0">

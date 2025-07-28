@@ -10,9 +10,9 @@
 RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스들의 사용방법과 수학 원리에 대한 설명은 <br>
 다음 문서를 참고하시길 바랍니다(documentation 은 현재 작업 중이며, 천천히 업데이트 할 예정입니다): <br><br>
 
-**Documentation**: https://www.notion.so/RendererJS-1f83ffee6f498052874bf7ff891dce93 <br><br>
+**Documentation**: [https://www.notion.so/RendererJS-1f83ffee6f498052874bf7ff891dce93](https://satin-hill-a2d.notion.site/RendererJS-1f83ffee6f498052874bf7ff891dce93) <br><br>
 
-현재 RendererJS ver2 는 이전에 만들었던 버전을 리팩토링(refactoring)한 것입니다. 
+RendererJS ver2 는 이전에 만들었던 버전을 리팩토링한 것입니다. 
 
 ### to-do
 - `AnimationState`, `Animator` 완성하기
@@ -24,7 +24,7 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 - `FBXMesh.getElement()` 에서 `ByEdge` 의 경우를 추가하기
 - `PMXMorph` 추가하기
 - `FBXGlobalSettings` 완성하기
-- 
+- `FBXDeformer` 에서 `transformAssociateModel` 의 경우 처리하기
 
 ## Tutorial
 캐릭터를 렌더링하기 전에, 가장 먼저 해야 할일은 `GameEngine` 을 초기화하여, 렌더러를 사용하기 위한 환경을 만드는 일입니다. <br>
@@ -55,7 +55,8 @@ main.zFar  = 5000;
 수 있는 것은 오직 `Worker` API 를 사용하는 방법 뿐입니다. `Texture.useWorker = true` 로 설정하면 <br>
 `TextureWorker.js` 가 활성화되어, 웹페이지가 프리징(freezing)에 걸리는 것을 방지할 수 있습니다:
 
-<img src="https://file.notion.so/f/f/fe6e2013-3ec2-466b-a297-5e801e33afd0/916507d0-ec2e-4a07-85b9-b14579834a5b/%EB%85%B9%ED%99%94_2025_06_24_13_51_07_509.gif?table=block&id=21c3ffee-6f49-8014-84d5-c1333bb49190&spaceId=fe6e2013-3ec2-466b-a297-5e801e33afd0&expirationTimestamp=1753646400000&signature=eHcwrbJq5SnDrUg_8lH8i-HTCZ1TFOWH4R9qzpyNmq0">
+<img src="https://file.notion.so/f/f/fe6e2013-3ec2-466b-a297-5e801e33afd0/916507d0-ec2e-4a07-85b9-b14579834a5b/%EB%85%B9%ED%99%94_2025_06_24_13_51_07_509.gif?table=block&id=21c3ffee-6f49-8014-84d5-c1333bb49190&spaceId=fe6e2013-3ec2-466b-a297-5e801e33afd0&expirationTimestamp=1753768800000&signature=gXH8qJM979-hXnpAzEQgrV9-Ia6YytnZ8AY13yjstvI">
+
 
 RendererJS 에서 `Texture` 는 오직 `PNG` 파일만을 임포트할 수 있음에 유의하시길 바랍니다. `JPG` `BMP` 와 같은 다른 형식의 이미지 파일들은 <br>
 `PNG` 파일로 변환하거나 

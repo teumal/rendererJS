@@ -13,8 +13,9 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 **Documentation**: [https://www.notion.so/RendererJS-1f83ffee6f498052874bf7ff891dce93](https://satin-hill-a2d.notion.site/RendererJS-1f83ffee6f498052874bf7ff891dce93) <br><br>
 
 현재 RendererJS 는 이전 버전을 리팩토링한 결과입니다. 이전 버전과의 차이점은 모듈(module)들을 <br>
-좀더 세분화하고 좀 더 최적화다는 점입니다. 또한 C++ 로 JS 파일을 작성했었던 이전 버전과 다르게 <br>
+좀더 세분화하고 좀 더 최적화헸다는 점입니다. 또한 C++ 로 JS 파일을 작성했었던 이전 버전과 다르게 <br>
 `fbx.js`, `pmx.js` 와 같은 모듈(Importer modules)들이 추가되었습니다. 이전 버전이 궁금하다면 <br>
+`RendererJS (legacy version).zip` 의 압축을 풀어서 사용하시길 바랍니다.
 
 
 ### to-do

@@ -1,4 +1,4 @@
-## Overview
+# Overview
 게임수학을 공부하기 위해 만든 간단한 렌더러 프로젝트입니다. 프로젝트의 목표는 WebGL 을 사용하지 않고, <br>
 `CanvasRenderingContext2D` API 를 사용하여 캐릭터 모델링을 구현하는 것입니다. 또한 텍스처(Texture) 및 <br>
 모델링 파일(Modeling)의 임포트(import) 또한 직접 해보는 것입니다. <br><br>
@@ -30,8 +30,8 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 - `FBXGlobalSettings` 완성하기
 - `FBXDeformer` 에서 `transformAssociateModel` 의 경우 처리하기
 
-## Tutorial
-캐릭터를 렌더링하기 전에, 가장 먼저 해야 할일은 `GameEngine` 을 초기화하여, 렌더러를 사용하기 위한<br> 
+# Tutorial
+캐릭터를 렌더링하기 전에 가장 먼저 해야 할일은 `GameEngine` 을 초기화하여, 렌더러를 사용하기 위한<br> 
 환경을 만드는 일입니다. 이를 위해 다음 코드를 작성해줍시다:
 
 ``` js
@@ -103,4 +103,168 @@ gameObject.update = function() { // update() 는 매 프레임마다 자동으�
 
 ## Example 0
 
+렌더러를 사용할 환경을 조성했으니, 이제 캐릭터 모델링을 불러와봅시다. RendererJS 는 파일을 동기적으로 읽을 수 있도록 <br>
+`FileStream` 이라는 클래스를 정의해서 사용합니다. 사용 방법은 C++ 의 `std::ifstream` 과 비슷합니다. 물론 직접 <br>
+`File` 을 읽는 것은 아니며, `File.arrayBuffer()` 로 얻은 `ArrayBuffer` 를 읽도록 설계되었습니다:
+
+``` js
+import {FileStream, TextEncoding, DataType} from "./Importer/FileStream.js";
+
+const input = document.getElementById("input");
+
+input.addEventListener("change", (e)=>{
+   const file = e.target.files[0];
+   
+   file.arrayBuffer().then((arrayBuffer)=>{
+       const stream = new FileStream(arrayBuffer);
+       
+       const mimeType = stream.readString(TextEncoding.Utf8, 4);
+       const version  = stream.read(DataType.Float);
+   });
+});
+```
+
+RendererJS 는 `PNG`, `PMX`, `FBX`, `VMD` 파일들을 임포트하며, 이 파일들을 불러오기 위해 사용되는 클래스들이 <br>
+`Texture`, `PMXFile`, `FBXFile`, `VMDFile` 입니다. 모두 `FileStream` 클래스를 사용하여 파일을 읽어들이며, <br>
+로드가 완료되었을 때 `oncomplete` 콜백이 호출됩니다 (참고로 Worker API 를 사용하는 것은 오직 `Texture` <br>
+뿐입니다). 이제 `example0.js` 의 코드를 보도록 합시다:
+
+``` js
+
+import { GameEngine, KeyCode, GameObject } from "./Core/GameEngine.js";
+import { Renderer } from "./Core/Renderer.js";
+import {Vector2,Vector3,Vector4,Matrix4x4,Quaternion,RotationOrder, DualQuaternion, MyMath} from "./Core/MyMath.js";
+import { Material, Color, Shader } from "./Core/Shader.js";
+import {Mesh, Triangle, Vertex, Bone } from "./Core/Mesh.js";
+import {Texture} from "./Importer/Texture.js";
+import { PMXFile } from "./Importer/pmx.js";
+import { Camera } from "./Core/Camera.js";
+import { FBXFile, FBXAnimCurve } from "./Importer/fbx.js";
+import { Transform } from "./Core/Transform.js";
+import { ExtrapolationMode, AnimationCurve, PropertyType } from "./Core/Animator.js";
+import { BitStream } from "./Importer/zlib.js";
+import { FileStream } from "./Importer/FileStream.js";
+import { VMDFile } from "./Importer/vmd.js";
+
+
+Texture.useWorker = true;
+GameEngine.initialize(document.getElementById("canvas"));
+
+const gameObject = new GameObject();
+const textures   = [];
+const main       = Camera.main;
+
+main.setViewport(
+    main.sx + main.width * 0.125,
+    main.sy + 50,
+    main.width * 0.8,
+    main.height * 0.8
+);
+
+main.fov   = 60;
+main.zNear = 1;
+main.zFar  = 5000;
+
+
+let frameRate = 0;
+let timer     = 0;
+let count     = 0;
+
+
+let state;
+
+document.getElementById("textureInput").addEventListener("change", (e)=>{
+    const count = e.target.files.length;
+
+    for(let i=0; i<count; ++i) {
+        textures.push(new Texture(e.target.files[i], tex => console.log(`${tex}`)) );
+    }
+});
+document.getElementById("pmxInput").addEventListener("change", (e)=>{
+    const pmxfile = new PMXFile();
+
+    pmxfile.read(e.target.files[0], (file)=>{
+        gameObject.renderer.mesh      = file.createMesh();
+        gameObject.renderer.materials = file.createMaterials(textures);
+        console.log(`${file}`);
+    });
+});
+document.getElementById("fbxInput").addEventListener("change", (e)=>{
+    const fbxfile  = new FBXFile();
+    const renderer = gameObject.renderer;
+
+    fbxfile.read(e.target.files[0], (file)=>{
+        console.log(`${file}`)
+
+        if(file.meshes.length > 0) {
+            renderer.mesh      = file.createMesh();
+            renderer.materials = file.createMaterials();
+        }
+        if(file.animStack) {
+            state = file.createAnimationState(gameObject);
+        }
+    });
+});
+
+let rotY    = 0;
+let rotX    = 0;
+let pos     = new Vector3(0,-13, 12.2);
+let isdirty = false;
+
+let t = 0;
+
+
+gameObject.transform.position = pos;
+
+gameObject.update = function() {
+    const deltaTime = GameEngine.deltaTime;
+    const moveSpeed = deltaTime * 20;
+    const rotSpeed  = deltaTime * 360;
+
+    isdirty = false;
+    count++;
+
+    if((timer += deltaTime) >= 1) {
+        frameRate = count;
+        timer -= 1;
+        count = 0;
+    }
+
+    Renderer.drawCube2D(main.min, main.width, main.height, new Color(135, 169, 207, 255)); // 카메라 영역을 표시
+    
+
+    if(state) {
+        state.evalulate(t);
+        t += deltaTime;
+    }
+
+
+    if(GameEngine.getKey(KeyCode.Left))  { rotY += rotSpeed; isdirty = true; } 
+    if(GameEngine.getKey(KeyCode.Right)) { rotY -= rotSpeed; isdirty = true; } 
+    if(GameEngine.getKey(KeyCode.Up))    { rotX += rotSpeed; isdirty = true; } 
+    if(GameEngine.getKey(KeyCode.Down))  { rotX -= rotSpeed; isdirty = true; } 
+
+    if(GameEngine.getKeyDown(KeyCode.Space)) gameObject.renderer.materials.forEach(mat => mat.wireFrameMode = !mat.wireFrameMode);
+    if(GameEngine.getKeyDown(KeyCode.Alpha0)) gameObject.renderer.materials.forEach(mat => mat.backfaceCulling = !mat.backfaceCulling);
+    if(GameEngine.getKeyDown(KeyCode.Alpha1)) gameObject.renderer.boneVisible = !gameObject.renderer.boneVisible;
+
+    if(GameEngine.getKey(KeyCode.W)) { pos.z += moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.S)) { pos.z -= moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.A)) { pos.x -= moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.D)) { pos.x += moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.F)) { pos.y -= moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.R)) { pos.y += moveSpeed; isdirty = true; }
+
+    if(isdirty) {
+        gameObject.transform.setLocalTransform(gameObject.transform.localScale, Quaternion.euler(rotX, rotY, 0), pos);
+    }
+    GameEngine.drawText(`${frameRate} fps, ${GameEngine.frameNumber} frame`, new Vector2(50,  50+10));
+    GameEngine.drawText(`position (WSAD): ${pos}`, new Vector2(50, 70+10));
+    GameEngine.drawText(`rotation (Arrow) : ${new Vector3(rotX, rotY, 0)}`, new Vector2(50, 90+10));
+
+    GameEngine.drawText(`backfaceCulling (Alpha0): ${gameObject.renderer.material.backfaceCulling}`, new Vector2(50, 120+10));
+    GameEngine.drawText(`wireFrameMode (Space): ${gameObject.renderer.material.wireFrameMode}`, new Vector2(50, 140+10));
+    GameEngine.drawText(`boneVisible (Alpha1) : ${gameObject.renderer.boneVisible}`, new Vector2(50, 160+10));
+};
+```
 

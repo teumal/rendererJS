@@ -79,8 +79,28 @@ RendererJS 에서 `Texture` 는 오직 `PNG` 파일만을 임포트할 수 있�
 와 비슷하다고 생각하시면 됩니다. 이후의 `Camera.fov, Camera.zNear, Camera.zFar` 는 원근투영 행렬을 만드는데 <br>
 사용되는 정보들입니다. 자세한 내용은 Documentation 을 읽어보시길 바랍니다.
 
+이렇게 카메라(Camera)와 게임엔진(GameEngine)을 초기화하여, 렌더러를 사용할 환경을 만드는데 성공했습니다. <br>
+이제 할일은 `GameObject` 를 생성하여, 매 프레임마다 수행할 작업을 `GameObject.update()` 에 등록하고 <br>
+`GameObject.renderer.mesh` 를 초기화하여, 캐릭터를 렌더링하는 일 뿐입니다:
+``` js
+const gameObject = new GameObject();
+
+gameObject.update = function() { // update() 는 매 프레임마다 자동으로 호출되는 함수입니다.
+   /** do something .. */ 
+}l
+```
+`GameEngine` 은 게임엔진에서 사용되는 기능들을 아주 간단하게 구현해놓은 클래스입니다. 예를 들어 키보드 입력은 <br>
+`GameEngine.getKeyDown()`, `GameEngine.getKey()`, `GameEngine.getKeyUp()` 등의 함수에 `KeyCode` 열거형을 <br>
+전달하는 것으로 감지할 수 있습니다. 이전 버전의 RendererJS 와 다르게 프레임 기반(frame-based)으로 작동하기에, <br>
+직접 `window.addEventListener("keydown", handler)` 처럼 하기 보다는, `GameEngine` 의 함수들을 사용하는 것을 <br>
+권장합니다. <br><br>
+
+또한 `GameEngine.deltaTime` 을 사용하여, 이전 프레임에서 현재 프레임으로 진입하기까지 걸린 시간(in seconds)을 <br>
+얻을 수 있음에 주목하시길 바랍니다. `window.requestAnimationFrame()` 은 일반적으로 `60 fps` 간격으로 호출되지만 <br>
+실행환경에 따라 호출간격이 다를 수 있습니다. 즉 항상 매 프레임마다 `2.0` 만큼 캐릭터를 움직이게 하기 보다는 <br>
+`2.0 * GameEngine.deltaTime` 처럼 해주어서 1초에 `2.0` 만큼 움직이게 한다면, 다른 환경에서도 비슷한 결과를 <br>
+얻을 수 있습니다.
+
 ## Example 0
-
-
 
 

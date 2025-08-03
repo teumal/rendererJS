@@ -59,10 +59,28 @@ main.zFar  = 5000;
 수 있는 것은 오직 `Worker` API 를 사용하는 방법 뿐입니다. `Texture.useWorker = true` 로 설정하면 <br>
 `TextureWorker.js` 가 활성화되어, 웹페이지가 프리징(freezing)에 걸리는 것을 방지할 수 있습니다:
 
+<img src="https://github.com/teumal/rendererJS/blob/main/Texture.useWorker.gif?raw=true">
 
 
+RendererJS 에서 `Texture` 는 오직 `PNG` 파일만을 임포트할 수 있음에 유의하시길 바랍니다. <br>
+다시 말해 `JPG` `BMP` 와 같은 다른 형식의 이미지 파일들은 `PNG` 파일로 직접 변환한 뒤 사용해야 합니다. <br>
+이는 RendererJS 의 목표가 가능한 직접 구현해는 것이기 때문이며, 변환하는 과정이 불편하다면 대신 <br>
+기존 JS 의 `Image` 클래스를 사용하는 것 또한 가능합니다.  <br><br>
 
-RendererJS 에서 `Texture` 는 오직 `PNG` 파일만을 임포트할 수 있음에 유의하시길 바랍니다. `JPG` `BMP` 와 같은 다른 형식의 이미지 파일들은 <br>
-`PNG` 파일로 변환하거나 
+다음은 `GameEngine.initialize(document.getElementById("canvas"));` 입니다. RendererJS 는 <br>
+디스플레이 출력 장치를 모니터(monitor)가 아니라 캔버스(canvas)라고 생각합니다. 그렇기에 `index.html` <br>
+에서 `<canvas>` 를 얻어와서 `getContext('2d')` 를 통해 `CanvasRenderingContext2D` 객체를 얻어와야 합니다 <br>
+이 과정을 대신 해주는 것이 바로 `GameEngine.initialize()` 함수입니다. 또한 `Window.requestAnimationFrame` <br>
+을 등록하여 프레임 업데이트(player loop)가 수행되게 해줍니다. <br><br>
+
+`Camera.main` 은 기본 카메라 객체를 의미하며, `GameEngine.initialize()` 에서 카메라 객체가 존재하지 않는다면 <br>
+자동으로 생성합니다. `Camera.setViewport()` 함수는 캔버스에서 카메라가 사용할 영역을 지정하는데 사용됩니다 <br>
+`setViewport(sx, sy, width, height)` 를 인자로 받으며, 캔버스의 `getImageData(sx, sy, width, height)` <br>
+와 비슷하다고 생각하시면 됩니다. 이후의 `Camera.fov, Camera.zNear, Camera.zFar` 는 원근투영 행렬을 만드는데 <br>
+사용되는 정보들입니다. 자세한 내용은 Documentation 을 읽어보시길 바랍니다.
+
+## Example 0
+
+
 
 

@@ -165,6 +165,31 @@ document.getElementById("fbxInput").addEventListener("change", (e)=>{
 
 ```
 위 코드는 `"textureInput"`, `"pmxInput"`, `"fbxInput"` 를 id 로 갖는 Element 들을 찾고, <br>
-`addEventListener("change", (e)=>{ ... })` 와 같이 콜백함수를 등록해줍니다. 
+`addEventListener("change", (e)=>{ ... })` 와 같이 콜백함수를 등록해줍니다. 여기서 `PNG` 파일의 <br>
+경우에만 `multiple` 속성이 적용되어, 여러개의 파일을 선택할 수 있습니다. <br><br>
 
+먼저 `FBX` 파일부터 살펴보겠습니다. `FBX` 파일을 불러오기 위해서는 `FBXFile.read(file, oncomplete)` 함수를 호출해야 합니다. <br>
+`e.target.files[0]` 을 파싱 완료했다면 `oncomplete` 콜백함수가 호출되며, `FBXFile.toString()` 으로 FBXFile 에서 읽어들인 <br>
+정보를 간략하게 표시합니다. <br><br>
 
+FBX 파일은 Mesh, Bone, Material, Deformer 등의 정보 뿐만 아니라, 애니메이션(Animation) 정보 또한 담을 수 있습니다. <br>
+`FBXFile.animStack != undefined` 의 여부로 `FBXFile` 에 애니메이션이 담겨 있는지 여부를 확인가능합니다. FBXFile 은 <br>
+AnimationStack 이 하나만 존재가능하기에, 하나의 FBX 파일에는 하나의 애니메이션만 담을 수 있음에 유의합니다. <br>
+예를 들어 캐릭터 애니메이션이 `Walk`, `Run` 등등 여러개라면, FBX 파일 또한 여러개가 필요하다는 의미입니다. <br><br>
+
+파싱한 FBX 파일에서 `Mesh`를 생성하려면, `FBXFile.createMesh()` 를 호출하시길 바랍니다. `Mesh` 는 정점(Vertex), 본(Bone), 인덱스 버퍼(Index) <br>
+그리고 스켈레탈 애니메이션(skeletal animation)에서 사용할 가중치 정보를 담을 `Deformer` 가 정의되어 있습니다. 메시의 정보를 <br>
+얻었다면, 메시가 몇 개의 서브메시(submesh)로 구성되었는지, 서브메시들의 삼각형을 그릴 때 사용할 셰이더(Shader)에 대한 정보가 필요하겠네요. <br><br>
+
+파싱한 FBX 파일에서 `Material[]` 를 생성하려면, `FBXFile.createMaterials()` 를 호출하시길 바랍니다. 본래 인자로 `textures` 배열을 받아서 <br>
+사용할 텍스쳐를 자동 매칭해주는 기능이 필요하지만, `PMX` 파일과는 달리 이 기능은 아직 구현되지 않았습니다. 고로 텍스처 맵핑을 하기 위해서는 <br>
+직접 `renderer.material.mainTex = textures[0]` 와 같이 할당해주어야 합니다. <br><br>
+
+애니메이션은 크게 `Animator`, `AnimationState` 로 나눌 수 있습니다. `AnimationState` 는 하나의 애니메이션(animation)을 정의하며, <br>
+`Animator` 는 `"Run"`, `"Walk"` 같은 애니메이션들을 관리하고, 자연스럽게 보간하는 역할을 담당합니다. 파싱한 FBX 파일에서 `AnimationState` <br>
+를 생성하려면, `FBXFile.createAnimationState()` 호출하시길 바랍니다. 다만 아직 `Animator` 는 구현되지 않은 관계로, `GameObject.update()` <br>
+에서 직접 `AnimationState.evaluate(t)` 처럼 해주는 것으로 애니메이션을 갱신함에 유의하시길 바랍니다. <br><br>
+
+아래 영상은 FBX 파일을 로드하고, 캐릭터 애니메이션을 임포트합니다:
+
+[캐릭터 애니메이션.mp4<img src="https://github.com/teumal/rendererJS/blob/main/dancing_man_thumbnail.PNG?raw=true">>](https://www.youtube.com/watch?v=IEd_rZC0sMc)

@@ -124,55 +124,12 @@ input.addEventListener("change", (e)=>{
 });
 ```
 
-RendererJS 는 `PNG`, `PMX`, `FBX`, `VMD` 파일들을 임포트하며, 이 파일들을 불러오기 위해 사용되는 클래스들이 <br>
+RendererJS 는 `PNG`, `PMX`, `FBX`, `VMD` 파일들을 불러올 수 있으며, 이 파일들을 불러오기 위해 사용되는 클래스들이 <br>
 `Texture`, `PMXFile`, `FBXFile`, `VMDFile` 입니다. 모두 `FileStream` 클래스를 사용하여 파일을 읽어들이며, <br>
 로드가 완료되었을 때 `oncomplete` 콜백이 호출됩니다 (참고로 Worker API 를 사용하는 것은 오직 `Texture` <br>
-뿐입니다). 이제 `example0.js` 의 코드를 보도록 합시다:
+뿐입니다). 이제 `example0.js` 의 코드들을 살펴보도록 합시다:
 
 ``` js
-
-import { GameEngine, KeyCode, GameObject } from "./Core/GameEngine.js";
-import { Renderer } from "./Core/Renderer.js";
-import {Vector2,Vector3,Vector4,Matrix4x4,Quaternion,RotationOrder, DualQuaternion, MyMath} from "./Core/MyMath.js";
-import { Material, Color, Shader } from "./Core/Shader.js";
-import {Mesh, Triangle, Vertex, Bone } from "./Core/Mesh.js";
-import {Texture} from "./Importer/Texture.js";
-import { PMXFile } from "./Importer/pmx.js";
-import { Camera } from "./Core/Camera.js";
-import { FBXFile, FBXAnimCurve } from "./Importer/fbx.js";
-import { Transform } from "./Core/Transform.js";
-import { ExtrapolationMode, AnimationCurve, PropertyType } from "./Core/Animator.js";
-import { BitStream } from "./Importer/zlib.js";
-import { FileStream } from "./Importer/FileStream.js";
-import { VMDFile } from "./Importer/vmd.js";
-
-
-Texture.useWorker = true;
-GameEngine.initialize(document.getElementById("canvas"));
-
-const gameObject = new GameObject();
-const textures   = [];
-const main       = Camera.main;
-
-main.setViewport(
-    main.sx + main.width * 0.125,
-    main.sy + 50,
-    main.width * 0.8,
-    main.height * 0.8
-);
-
-main.fov   = 60;
-main.zNear = 1;
-main.zFar  = 5000;
-
-
-let frameRate = 0;
-let timer     = 0;
-let count     = 0;
-
-
-let state;
-
 document.getElementById("textureInput").addEventListener("change", (e)=>{
     const count = e.target.files.length;
 
@@ -206,65 +163,8 @@ document.getElementById("fbxInput").addEventListener("change", (e)=>{
     });
 });
 
-let rotY    = 0;
-let rotX    = 0;
-let pos     = new Vector3(0,-13, 12.2);
-let isdirty = false;
-
-let t = 0;
-
-
-gameObject.transform.position = pos;
-
-gameObject.update = function() {
-    const deltaTime = GameEngine.deltaTime;
-    const moveSpeed = deltaTime * 20;
-    const rotSpeed  = deltaTime * 360;
-
-    isdirty = false;
-    count++;
-
-    if((timer += deltaTime) >= 1) {
-        frameRate = count;
-        timer -= 1;
-        count = 0;
-    }
-
-    Renderer.drawCube2D(main.min, main.width, main.height, new Color(135, 169, 207, 255)); // 카메라 영역을 표시
-    
-
-    if(state) {
-        state.evalulate(t);
-        t += deltaTime;
-    }
-
-
-    if(GameEngine.getKey(KeyCode.Left))  { rotY += rotSpeed; isdirty = true; } 
-    if(GameEngine.getKey(KeyCode.Right)) { rotY -= rotSpeed; isdirty = true; } 
-    if(GameEngine.getKey(KeyCode.Up))    { rotX += rotSpeed; isdirty = true; } 
-    if(GameEngine.getKey(KeyCode.Down))  { rotX -= rotSpeed; isdirty = true; } 
-
-    if(GameEngine.getKeyDown(KeyCode.Space)) gameObject.renderer.materials.forEach(mat => mat.wireFrameMode = !mat.wireFrameMode);
-    if(GameEngine.getKeyDown(KeyCode.Alpha0)) gameObject.renderer.materials.forEach(mat => mat.backfaceCulling = !mat.backfaceCulling);
-    if(GameEngine.getKeyDown(KeyCode.Alpha1)) gameObject.renderer.boneVisible = !gameObject.renderer.boneVisible;
-
-    if(GameEngine.getKey(KeyCode.W)) { pos.z += moveSpeed; isdirty = true; }
-    if(GameEngine.getKey(KeyCode.S)) { pos.z -= moveSpeed; isdirty = true; }
-    if(GameEngine.getKey(KeyCode.A)) { pos.x -= moveSpeed; isdirty = true; }
-    if(GameEngine.getKey(KeyCode.D)) { pos.x += moveSpeed; isdirty = true; }
-    if(GameEngine.getKey(KeyCode.F)) { pos.y -= moveSpeed; isdirty = true; }
-    if(GameEngine.getKey(KeyCode.R)) { pos.y += moveSpeed; isdirty = true; }
-
-    if(isdirty) {
-        gameObject.transform.setLocalTransform(gameObject.transform.localScale, Quaternion.euler(rotX, rotY, 0), pos);
-    }
-    GameEngine.drawText(`${frameRate} fps, ${GameEngine.frameNumber} frame`, new Vector2(50,  50+10));
-    GameEngine.drawText(`position (WSAD): ${pos}`, new Vector2(50, 70+10));
-    GameEngine.drawText(`rotation (Arrow) : ${new Vector3(rotX, rotY, 0)}`, new Vector2(50, 90+10));
-
-    GameEngine.drawText(`backfaceCulling (Alpha0): ${gameObject.renderer.material.backfaceCulling}`, new Vector2(50, 120+10));
-    GameEngine.drawText(`wireFrameMode (Space): ${gameObject.renderer.material.wireFrameMode}`, new Vector2(50, 140+10));
-    GameEngine.drawText(`boneVisible (Alpha1) : ${gameObject.renderer.boneVisible}`, new Vector2(50, 160+10));
-};
 ```
+위 코드는 `"textureInput"`, `"pmxInput"`, `"fbxInput"` 를 id 로 갖는 Element 들을 찾고, <br>
+`addEventListener("change", (e)=>{ ... })` 와 같이 콜백함수를 등록해줍니다. 
+
 

@@ -59,7 +59,7 @@ main.zFar  = 5000;
 수 있는 것은 오직 `Worker` API 를 사용하는 방법 뿐입니다. `Texture.useWorker = true` 로 설정하면 <br>
 `TextureWorker.js` 가 활성화되어, 웹페이지가 프리징(freezing)에 걸리는 것을 방지할 수 있습니다:
 
-<img src="https://github.com/teumal/rendererJS/blob/main/Texture.useWorker.gif?raw=true">
+![Texture useWorker](https://github.com/user-attachments/assets/db9668e6-b17e-4c6f-abcc-b1b0892c637d)
 
 
 RendererJS 에서 `Texture` 는 오직 `PNG` 파일만을 임포트할 수 있음에 유의하시길 바랍니다. <br>
@@ -87,7 +87,7 @@ const gameObject = new GameObject();
 
 gameObject.update = function() { // update() 는 매 프레임마다 자동으로 호출되는 함수입니다.
    /** do something .. */ 
-}l
+};
 ```
 `GameEngine` 은 게임엔진에서 사용되는 기능들을 아주 간단하게 구현해놓은 클래스입니다. 예를 들어 키보드 입력은 <br>
 `GameEngine.getKeyDown()`, `GameEngine.getKey()`, `GameEngine.getKeyUp()` 등의 함수에 `KeyCode` 열거형을 <br>
@@ -195,9 +195,10 @@ FBX 파일 또한 여러개가 필요하다는 의미입니다. <br><br>
 `GameObject.update()` 에서 직접 `AnimationState.evaluate(t)` 처럼 해주는 것으로 애니메이션을 갱신 <br>
 해야 함에 유의하시길 바랍니다. <br><br>
 
-아래 영상은 FBX 파일을 로드하고, 캐릭터 애니메이션을 임포트합니다:
+아래 영상은 https://free3d.com/3d-model/manuel-animated-001-dancing-256270.html 에서 다운받을 수 있는 <br>
+춤추는 사람의 모델링 파일을 임포트합니다:
 
-[캐릭터 애니메이션.mp4<img src="https://github.com/teumal/rendererJS/blob/main/dancing_man_thumbnail.PNG?raw=true">>](https://www.youtube.com/watch?v=IEd_rZC0sMc)
+[<img width="1881" height="941" alt="dancing_man" src="https://github.com/user-attachments/assets/34cafe67-9864-4305-8b04-f8dff9da096d" />](https://youtu.be/MvE98X46lOI?si=RBHo61f4KKxhxtEP)
 
 위 영상에서는 하나의 FBX 파일에 춤추는 애니메이션까지 포함되어 있었으며, `FBXFile.toString()` 을 해보면 <br>
 서브메시(submesh)가 하나만 존재함을 알 수 있습니다. 그렇기에 사용되는 `Material` 또한 하나이며, <br>
@@ -211,26 +212,27 @@ FBX 파일 또한 여러개가 필요하다는 의미입니다. <br><br>
 의 이름이 항상 저장되어 있으므로(내부적으로 texture index 의 형태로 저장됩니다), `PMXFile.createMaterials()` <br>
 의 인자로 `textures` 의 배열을 넘겨주면, 텍스처의 이름을 통해 자동으로 `Material.mainTex` 를 할당가능합니다. <br><br>
 
-다만 유의사항이 한가지 있는데, PMX 파일에 저장되어 있는 텍스처의 이름과 다운받은 이미지 파일이 다를 수도 있다는 점입니다. <br>
-예를 들어 https://genshin.hoyoverse.com/ja/news/detail/104561 에서 다운 받을 수 있는 리사(Lisa)의 모델링 파일의 경우, <br>
-일부 텍스처 파일이 PMX 에 저장되어 있는 정보와 이름이 일치하지 않음을 볼 수 있습니다:
+다만 유의사항이 한가지 있는데, PMX 파일에 저장되어 있는 텍스처의 이름과 다운받은 이미지 파일이 <br>
+다를 수도 있다는 점입니다.  예를 들어 https://genshin.hoyoverse.com/ja/news/detail/104561 에서 <br>
+다운 받을 수 있는 리사(Lisa)의 모델링 파일의 경우, 일부 텍스처 파일이 PMX 에 저장되어 있는 정보와 이름이 일치하지 않음을 볼 수 있습니다:
 
 <img width="1836" height="940" alt="lisa_texture_name1" src="https://github.com/user-attachments/assets/262536de-7455-4e04-b180-ff76c99dda3b" />
 <img width="855" height="202" alt="lisa_texture_name2" src="https://github.com/user-attachments/assets/8e2fa075-e8e6-4cb4-ad7c-8652c55cf79a" />
 
-보다시피 얼굴 부분의 서브메시(submesh)에서 사용할 `Texture` 를 찾지 못해, 캐릭터의 얼굴이 제대로 그려지지 않습니다. <br>
-이는 `PMXFile.toString()` 에서는 얼굴을 렌더링할 때 사용할 텍스처의 이름은 `Texture\脸.png` 이지만, 다운받은 폴더에는 <br>
-`Texture\顔.png` 라는 이름으로 저장되어 있기 때문입니다. <br><br>
+보다시피 얼굴 부분의 서브메시(submesh)에서 사용할 `Texture` 를 찾지 못해, 캐릭터의 얼굴이 제대로 <br>
+그려지지 않습니다. 이는 `PMXFile.toString()` 에서는 얼굴을 렌더링할 때 사용할 텍스처의 이름은 <br>
+`Texture\脸.png` 이지만, 다운받은 폴더에는 `Texture\顔.png` 라는 이름으로 저장되어 있기 때문입니다. <br><br>
 
-고로 이 문제를 해결하기 위해서는 이미지 파일의 이름을 `Texture\顔.png` 에서 `Texture\脸.png` 로 수정해주어야 주어야 하며, <br>
-마찬가지로 `髪.png` 또한 `头发.png` 으로 수정해주면 됩니다. 각각 중국어로 얼굴과 머리카락을 의미하며, 수정한 결과는 다음과 같습니다:
+고로 이 문제를 해결하기 위해서는 이미지 파일의 이름을 `Texture\顔.png` 에서 `Texture\脸.png` 로 <br>
+수정해주어야 주어야 하며, 마찬가지로 `髪.png` 또한 `头发.png` 으로 수정해주면 됩니다. 각각 중국어로 얼굴과 <br>
+머리카락을 의미하며, 수정한 결과는 다음과 같습니다:
 
 <img width="1856" height="929" alt="lisa_rendering" src="https://github.com/user-attachments/assets/695778a3-0721-4672-a1ca-3e95e381506b" />
 
-FBX 와는 다르게 PMX 자체에는 애니메이션 정보가 들어있지 않습니다. 대신 VMD (Vocaloid Motion Data) 파일을 불러오는 것으로 <br>
-애니메이션을 적용할 수 있습니다. 다만 아직 `vmd.js` 가 구현되지 않았기에, 현재 RendererJS 에서 애니메이션은 FBX 파일만 <br>
-가능함에 유의해주시길 바랍니다. <br><br>
+FBX 와는 다르게 PMX 자체에는 애니메이션 정보가 들어있지 않습니다. 대신 VMD (Vocaloid Motion Data) 파일을<br>
+불러오는 것으로 애니메이션을 적용할 수 있습니다. 다만 아직 `vmd.js` 가 구현되지 않았기에, 현재 RendererJS 에서<br>
+애니메이션은 FBX 파일만 가능함에 유의해주시길 바랍니다. <br><br>
 
-그런 관계로 PMX 파일로 불러온 캐릭터에게 `Bone`, `Deformer` 는 불필요하게 계산량만 늘리는 정보들일 뿐입니다. 성능을 <br>
-향상시키기 위해 `gameObject.renderer.mesh.vertices.forEach(vertex => vertex.deformer = null);` 문장을 추가해주시길 <br>
-바랍니다. 리사(lisa)의 경우, `29 fps` 에서 `39 fps` 까지 성능이 향상되는 결과를 볼 수 있습니다.
+그런 관계로 PMX 파일로 불러온 캐릭터에게 `Bone`, `Deformer` 는 불필요하게 계산량만 늘리는 정보들일 뿐입니다. <br>
+성능을 향상시키기 위해 `gameObject.renderer.mesh.vertices.forEach(vertex => vertex.deformer = null);` <br>
+문장을 추가해주시길 바랍니다. 리사(lisa)의 경우, `29 fps` 에서 `39 fps` 까지 성능이 향상되는 결과를 볼 수 있습니다.

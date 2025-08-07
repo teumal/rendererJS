@@ -185,16 +185,52 @@ FBX 파일 또한 여러개가 필요하다는 의미입니다. <br><br>
 
 파싱한 FBX 파일에서 `Material[]` 를 생성하려면, `FBXFile.createMaterials()` 를 호출하시길 바랍니다.  <br>
 본래 인자로 `textures` 배열을 받아서 사용할 텍스쳐를 자동 매칭해주는 기능이 필요하지만, `PMX` 파일과는  <br>
-달리 이 기능은 아직 구현되지 않았습니다. 고로 텍스처 맵핑을 하기 위해서는 직접 `renderer.material.mainTex = textures[0]`  <br>
-와 같이 할당해주어야 합니다. <br><br>
+달리 이 기능은 아직 구현되지 않았습니다. 고로 텍스처 맵핑을 하기 위해서는 직접 <br>
+`renderer.material.mainTex = textures[0]` 와 같이 할당해주어야 합니다. <br><br>
 
 애니메이션은 크게 `Animator`, `AnimationState` 로 나눌 수 있습니다. `AnimationState` 는 하나의 <br>
 애니메이션(animation)을 정의하며, `Animator` 는 `"Run"`, `"Walk"` 같은 애니메이션들을 관리하고,  <br>
 자연스럽게 보간하는 역할을 담당합니다. 파싱한 FBX 파일에서 `AnimationState` 를 생성하려면,  <br>
 `FBXFile.createAnimationState()` 호출하시길 바랍니다. 다만 아직 `Animator` 는 구현되지 않은 관계로,  <br>
 `GameObject.update()` 에서 직접 `AnimationState.evaluate(t)` 처럼 해주는 것으로 애니메이션을 갱신 <br>
-해야 함에 유의하시길 바랍니다. <br><br> <br>
+해야 함에 유의하시길 바랍니다. <br><br>
 
 아래 영상은 FBX 파일을 로드하고, 캐릭터 애니메이션을 임포트합니다:
 
 [캐릭터 애니메이션.mp4<img src="https://github.com/teumal/rendererJS/blob/main/dancing_man_thumbnail.PNG?raw=true">>](https://www.youtube.com/watch?v=IEd_rZC0sMc)
+
+위 영상에서는 하나의 FBX 파일에 춤추는 애니메이션까지 포함되어 있었으며, `FBXFile.toString()` 을 해보면 <br>
+서브메시(submesh)가 하나만 존재함을 알 수 있습니다. 그렇기에 사용되는 `Material` 또한 하나이며, <br>
+`renderer.material.mainTex = textures[0]` 처럼 직접 사용할 `Texture` 를 등록해주었습니다. <br><br>
+
+다음은 `PMX` 파일을 살펴봅시다. `PMX` 파일을 불러오기 위해서는 `PMXFile.read(file, oncomplete)` 함수를 <br>
+호출해야 합니다. `e.target.files[0]` 을 파싱 완료했다면 `oncomplete` 콜백함수가 호출되며, <br>
+`PMXFile.toString()` 으로 PMXFile 에서 읽어들인 정보를 간략하게 표시합니다. <br><br>
+
+`Mesh`, `Material[]` 을 생성하는 방법은 `FBXFile` 때와 같습니다. PMX 파일은 `Material` 이 사용할 `Texture` <br>
+의 이름이 항상 저장되어 있으므로(내부적으로 texture index 의 형태로 저장됩니다), `PMXFile.createMaterials()` <br>
+의 인자로 `textures` 의 배열을 넘겨주면, 텍스처의 이름을 통해 자동으로 `Material.mainTex` 를 할당가능합니다. <br><br>
+
+다만 유의사항이 한가지 있는데, PMX 파일에 저장되어 있는 텍스처의 이름과 다운받은 이미지 파일이 다를 수도 있다는 점입니다. <br>
+예를 들어 https://genshin.hoyoverse.com/ja/news/detail/104561 에서 다운 받을 수 있는 리사(Lisa)의 모델링 파일의 경우, <br>
+일부 텍스처 파일이 PMX 에 저장되어 있는 정보와 이름이 일치하지 않음을 볼 수 있습니다:
+
+<img width="1836" height="940" alt="lisa_texture_name1" src="https://github.com/user-attachments/assets/262536de-7455-4e04-b180-ff76c99dda3b" />
+<img width="855" height="202" alt="lisa_texture_name2" src="https://github.com/user-attachments/assets/8e2fa075-e8e6-4cb4-ad7c-8652c55cf79a" />
+
+보다시피 얼굴 부분의 서브메시(submesh)에서 사용할 `Texture` 를 찾지 못해, 캐릭터의 얼굴이 제대로 그려지지 않습니다. <br>
+이는 `PMXFile.toString()` 에서는 얼굴을 렌더링할 때 사용할 텍스처의 이름은 `Texture\脸.png` 이지만, 다운받은 폴더에는 <br>
+`Texture\顔.png` 라는 이름으로 저장되어 있기 때문입니다. <br><br>
+
+고로 이 문제를 해결하기 위해서는 이미지 파일의 이름을 `Texture\顔.png` 에서 `Texture\脸.png` 로 수정해주어야 주어야 하며, <br>
+마찬가지로 `髪.png` 또한 `头发.png` 으로 수정해주면 됩니다. 각각 중국어로 얼굴과 머리카락을 의미하며, 수정한 결과는 다음과 같습니다:
+
+<img width="1856" height="929" alt="lisa_rendering" src="https://github.com/user-attachments/assets/695778a3-0721-4672-a1ca-3e95e381506b" />
+
+FBX 와는 다르게 PMX 자체에는 애니메이션 정보가 들어있지 않습니다. 대신 VMD (Vocaloid Motion Data) 파일을 불러오는 것으로 <br>
+애니메이션을 적용할 수 있습니다. 다만 아직 `vmd.js` 가 구현되지 않았기에, 현재 RendererJS 에서 애니메이션은 FBX 파일만 <br>
+가능함에 유의해주시길 바랍니다. <br><br>
+
+그런 관계로 PMX 파일로 불러온 캐릭터에게 `Bone`, `Deformer` 는 불필요하게 계산량만 늘리는 정보들일 뿐입니다. 성능을 <br>
+향상시키기 위해 `gameObject.renderer.mesh.vertices.forEach(vertex => vertex.deformer = null);` 문장을 추가해주시길 <br>
+바랍니다. 리사(lisa)의 경우, `29 fps` 에서 `39 fps` 까지 성능이 향상되는 결과를 볼 수 있습니다.

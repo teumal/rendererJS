@@ -29,6 +29,7 @@ RendererJS 를 구현하는데 참고한 참고자료(reference) 및 클래스�
 - `PMXMorph` 추가하기
 - `FBXGlobalSettings` 완성하기
 - `FBXDeformer` 에서 `transformAssociateModel` 의 경우 처리하기
+- `Frustum` 클래스 추가 후, 절두체 컬링 추가하기
 
 # Tutorial
 캐릭터를 렌더링하기 전에 가장 먼저 해야 할일은 `GameEngine` 을 초기화하여, 렌더러를 사용하기 위한<br> 

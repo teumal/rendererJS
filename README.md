@@ -236,4 +236,71 @@ FBX 와는 다르게 PMX 자체에는 애니메이션 정보가 들어있지 않
 
 그런 관계로 PMX 파일로 불러온 캐릭터에게 `Bone`, `Deformer` 는 불필요하게 계산량만 늘리는 정보들일 뿐입니다. <br>
 성능을 향상시키기 위해 `gameObject.renderer.mesh.vertices.forEach(vertex => vertex.deformer = null);` <br>
-문장을 추가해주시길 바랍니다. 리사(lisa)의 경우, `29 fps` 에서 `39 fps` 까지 성능이 향상되는 결과를 볼 수 있습니다.
+문장을 추가해주시길 바랍니다. 리사(lisa)의 경우, `29 fps` 에서 `39 fps` 까지 성능이 향상되는 결과를 볼 수 있습니다. <br><br>
+
+마지막으로 볼 문장은 `GameObject.update()` 입니다:
+
+``` js
+gameObject.update = function() {
+    const deltaTime = GameEngine.deltaTime;
+    const moveSpeed = deltaTime * 20;
+    const rotSpeed  = deltaTime * 360;
+
+    isdirty = false;
+    count++;
+
+    if((timer += deltaTime) >= 1) {
+        frameRate = count;
+        timer -= 1;
+        count = 0;
+    }
+
+    Renderer.drawCube2D(main.min, main.width, main.height, new Color(135, 169, 207, 255)); // 카메라 영역을 표시
+    
+
+    if(state) {
+        state.evalulate(t);
+        t += deltaTime;
+    }
+
+
+    if(GameEngine.getKey(KeyCode.Left))  { rotY += rotSpeed; isdirty = true; } 
+    if(GameEngine.getKey(KeyCode.Right)) { rotY -= rotSpeed; isdirty = true; } 
+    if(GameEngine.getKey(KeyCode.Up))    { rotX += rotSpeed; isdirty = true; } 
+    if(GameEngine.getKey(KeyCode.Down))  { rotX -= rotSpeed; isdirty = true; } 
+
+    if(GameEngine.getKeyDown(KeyCode.Space)) gameObject.renderer.materials.forEach(mat => mat.wireFrameMode = !mat.wireFrameMode);
+    if(GameEngine.getKeyDown(KeyCode.Alpha0)) gameObject.renderer.materials.forEach(mat => mat.backfaceCulling = !mat.backfaceCulling);
+    if(GameEngine.getKeyDown(KeyCode.Alpha1)) gameObject.renderer.boneVisible = !gameObject.renderer.boneVisible;
+
+    if(GameEngine.getKey(KeyCode.W)) { pos.z += moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.S)) { pos.z -= moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.A)) { pos.x -= moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.D)) { pos.x += moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.F)) { pos.y -= moveSpeed; isdirty = true; }
+    if(GameEngine.getKey(KeyCode.R)) { pos.y += moveSpeed; isdirty = true; }
+
+    if(isdirty) {
+        gameObject.transform.setLocalTransform(gameObject.transform.localScale, Quaternion.euler(rotX, rotY, 0), pos);
+    }
+    GameEngine.drawText(`${frameRate} fps, ${GameEngine.frameNumber} frame`, new Vector2(50,  50+10));
+    GameEngine.drawText(`position (WSAD): ${pos}`, new Vector2(50, 70+10));
+    GameEngine.drawText(`rotation (Arrow) : ${new Vector3(rotX, rotY, 0)}`, new Vector2(50, 90+10));
+
+    GameEngine.drawText(`backfaceCulling (Alpha0): ${gameObject.renderer.material.backfaceCulling}`, new Vector2(50, 120+10));
+    GameEngine.drawText(`wireFrameMode (Space): ${gameObject.renderer.material.wireFrameMode}`, new Vector2(50, 140+10));
+    GameEngine.drawText(`boneVisible (Alpha1) : ${gameObject.renderer.boneVisible}`, new Vector2(50, 160+10));
+};
+
+```
+
+위 코드는 `timer += GameEngine.deltaTime` 를 통해 1초 동안 몇번의 프레임이 지나갔는지를 확인합니다. <br>
+또한 `Renderer.drawCube2D()` 를 호출하여, 카메라의 영역을 나타내는 사각형을 그려줍니다. <br>
+위에서 언급했듯이, 아직 `Animator` 가 구현되지 않았기에 `AnimationState.evaluate()` 를 <br>
+호출하여 애니메이션을 갱신해줌에 주목하시길 바랍니다. <br><br>
+
+이후의 코드들은 WASD 로 캐릭터를 좌우앞뒤로 움직이도록 하며, Space, Alpha0, Alpha1 를 <br>
+누르는 것으로 와이어 프레임 모드(wireFrameMode), 백페이스 컬링(backfaceCulling), <br>
+본 표시 여부(boneVisible)를 활성화시킵니다.
+
+

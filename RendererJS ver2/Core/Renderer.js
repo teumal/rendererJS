@@ -534,6 +534,33 @@ export class Renderer {
             }
         }
     }
+
+
+    /** 현재 카메라의 평면에 Texture 를 그립니다. min, max 는 항상 스크린 좌표(screen coordinate)이어야 합니다. */
+    static drawTexture2D(min, max, texture) {
+        const camera    = Renderer.camera;
+        const screenPos = Renderer.#temp0;
+        const uvPos     = Renderer.#temp1;
+        const color     = Renderer.#color0;
+
+        const minX = MyMath.clamp(min.x, camera.sx, camera.sx + camera.width);
+        const minY = MyMath.clamp(min.y, camera.sy, camera.sy + camera.height);
+        const maxX = MyMath.clamp(max.x, camera.sx, camera.sx + camera.width);
+        const maxY = MyMath.clamp(max.y, camera.sy, camera.sy + camera.height);
+
+        const XSTEP = 1 / (maxX-minX);
+        const YSTEP = 1 / (maxY-minY);
+
+        for(let y=minY, ystep=0; y<maxY; ++y, ystep+=YSTEP) {
+            for(let x=minX, xstep=0; x<maxX; ++x, xstep+=XSTEP) {
+                screenPos.assign(x, y);
+                uvPos.assign(xstep, ystep);
+
+                Shader.tex2D(texture, uvPos, color);
+                Renderer.setPixel(screenPos, color);
+            }
+        }
+    }
 }
 
 

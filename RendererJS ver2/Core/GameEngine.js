@@ -291,7 +291,7 @@ export class GameEngine {
     static drawText(text, screenPos) { 
         GameEngine.#textQueue.push({ 
             text : text, 
-            pos  : screenPos
+            pos  : screenPos.clone()
         }); 
     }
 

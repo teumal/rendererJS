@@ -6,7 +6,7 @@ import { GameEngine } from "./GameEngine.js";
 
 
 /** Deformer.deformPosition() 에서 사용할 skinning method 를 명시합니다. */
-export const DeformType = {
+export const SkinningType = {
     Linear         : 0,
     DualQuaternion : 1,
     Blend          : 2,
@@ -92,18 +92,6 @@ export class Bone extends Transform {
 
     /** 바인딩 포즈(bindPose)를 설정합니다. */
     setBindPose(scale, rotation, position) {
-
-        if(scale instanceof Matrix4x4) {
-            scale = new Transform("BindPose", scale);
-        }
-        if(scale instanceof Transform) {
-            const transform = scale;
-
-            scale    = transform.scale;
-            rotation = transform.rotation;
-            position = transform.position;
-        }
-
         this.#invBindPose.setWorldTransform(scale, rotation, position);
         this.#invBindPose.inverse(this.#invBindPose);
     }
@@ -181,7 +169,7 @@ export class Deformer {
 
 
     /** 정점을 변형시키기 위해 사용할 skinning method 를 명시하는 DeformType 열거형 */
-    deformType = DeformType.Linear;
+    skinningType = SkinningType.Linear;
 
 
     /** 가중치들의 목록을 나타내는 Float32Array 또는 number[]. */
@@ -192,8 +180,12 @@ export class Deformer {
     boneNames;
 
 
-    /**  */
+    /** Float32Array 또는 number[]. SkinningType.Blend 에서만 사용됩니다. */
     blendWeights;
+
+
+    /** 회전의 기준이 되는 점을 나타내는 Vector3. SkinningType.Spherical 에서만 사용됩니다. */
+    rotationCenter;
 
 
     /////////////////////////
@@ -252,10 +244,12 @@ export class Deformer {
         const temp     = Deformer.#temp1;
         const dq_blend = Deformer.#temp2;
 
-        const dq_0 = bones.get(this.boneNames[0]).skinningDQ(); // 불필요한 초기화를 피하기 위해, dq_blend 는
-        const w_0  = this.weights[0];                           // 0 번째 본의 스키닝 연산으로 초기화해준다:
-        dq_0.mulScalar(w_0, dq_blend);                          // dq_blend = (w_0 · dq_0)
-        cache.w = w_0;
+        {
+            const dq_0 = bones.get(this.boneNames[0]).skinningDQ(); // 불필요한 초기화를 피하기 위해, dq_blend 는
+            const w_0  = this.weights[0];                           // 0 번째 본의 스키닝 연산으로 초기화해준다:
+            dq_0.mulScalar(w_0, dq_blend);                          // dq_blend = (w_0 · dq_0)
+            cache.w = w_0;
+        }
 
         for(let i=1; i<boneCount; ++i) {
             const dq_i = bones.get(this.boneNames[i]).skinningDQ();
@@ -277,13 +271,19 @@ export class Deformer {
     }
 
 
-    /**  */
+    /** Spherical Deform Skinning 을 사용하여 vertex.position 을 변형시킵니다. */
     #spherical(vertex, bones) {
+        const bone0   = bones.get(this.boneNames[0]);
+        const bone1   = bones.get(this.boneNames[1]);
+        const center  = this.rotationCenter;
+        const weight0 = this.weights[0];
+        const weight1 = this.weights[1];
 
+        
     }
 
 
-    /** vertex.position 을 deformType 으로 명시한 skinning method 로 변형시킵니다.
+    /** vertex.position 을 skinningType 으로 명시한 skinning method 로 변형시킵니다.
      * 
      *  결과는 변형된 vertex.position 을 나타내는 Vector4 입니다. 계산량을 줄이기 위해 항상 Deformer 는
      * 
@@ -299,11 +299,11 @@ export class Deformer {
         if(this.#frameNumber == frameNumber) { // #position 는 매 프레임 진입 시마다 재계산되며,
             return this.#position;             // 계산된 프레임이 끝날 때까지 유효하다.
         }
-        switch(this.deformType) {
-            case DeformType.Linear:         { this.#linear(vertex, bones); break; }
-            case DeformType.DualQuaternion: { this.#dualQuaternion(vertex, bones); break; }
-            case DeformType.Blend:          { this.#blend(vertex, bones); break; }
-            case DeformType.Spherical:      { this.#spherical(vertex, bones); break; }
+        switch(this.skinningType) {
+            case SkinningType.Linear:         { this.#linear(vertex, bones); break; }
+            case SkinningType.DualQuaternion: { this.#dualQuaternion(vertex, bones); break; }
+            case SkinningType.Blend:          { this.#blend(vertex, bones); break; }
+            case SkinningType.Spherical:      { this.#spherical(vertex, bones); break; }
         };
         if(this.#position.w != 1) {                                       // #position.w == 1 이 아니라면, w 값으로 각 성분들을 
             this.#position.mulScalar(1/this.#position.w, this.#position); // 나누어주는 것으로 정규화(normalize)시킨다.

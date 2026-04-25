@@ -369,6 +369,20 @@ export class Renderer {
      * 
      *  전달한다면 사각형의 픽셀을 채우는 대신, 선을 그어 그립니다. */
     static drawCube2D(min, width, height, color, wireFrameMode=false) {
+
+        if(wireFrameMode) {
+            min = Renderer.camera.screenToWorld(min);
+
+            const p0 = Renderer.#temp2.assign(min.x, min.y);
+            const p1 = Renderer.#temp3.assign(min.x, min.y - height);
+
+            Renderer.drawLine2D(p0, p1, color); p0.assign(min.x + width, min.y - height);
+            Renderer.drawLine2D(p1, p0, color); p1.assign(min.x + width, min.y);
+            Renderer.drawLine2D(p0, p1, color); p0.assign(min.x, min.y);
+            Renderer.drawLine2D(p1, p0, color);
+            return;
+        }
+
         const max = Renderer.#temp0.assign(min.x+width, min.y+height);
 
         for(let y=min.y; y<max.y; ++y) {
@@ -394,7 +408,7 @@ export class Renderer {
             Renderer.drawArc2D(to, 2, Color.blue, true);
             GameEngine.drawText("from", camera.worldToScreen(from));
             GameEngine.drawText("to", camera.worldToScreen(to));
-            Renderer.drawLine2D(from, to, new Color(255, 0, 0, 30), false, false);
+            Renderer.drawLine2D(from, to, new Color(255, 0, 0, 130), false, false);
         }
         from = camera.worldToScreen(from, Renderer.#temp0);
         to   = camera.worldToScreen(to, Renderer.#temp1);

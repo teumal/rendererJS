@@ -245,6 +245,13 @@ export class Vector2 {
     }
 
 
+    /** 정규화한 벡터를 out 에 담아 돌려줍니다. */
+    normalize(out=new Vector2()) {
+        const invSize = 1.0 / this.magnitude;
+        return this.mulScalar(invSize, out);
+    }
+
+
     /** 벡터의 크기의 제곱을 돌려줍니다. 결과는 number 입니다. */
     get sqrMagnitude() { return Vector2.dot(this,this); }
 
@@ -1553,7 +1560,7 @@ export class DualQuaternion {
     }
 
 
-    /**  */
+    /** this 의 복사본을 나타내는 DualQuaternion 을 생성하여 돌려줍니다. */
     clone() { return new DualQuaternion(this.real, this.dual); }
 
 

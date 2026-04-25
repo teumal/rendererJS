@@ -12,19 +12,24 @@ export class Transform {
     static #temp4 = new Vector3();
     static #temp5 = new Vector3();
 
-    #localPosition = new Vector3();
-    #localScale    = new Vector3(1,1,1);
-    #localRotation = new Quaternion();
 
-    #worldPosition = new Vector3();
-    #worldScale    = new Vector3(1,1,1);
-    #worldRotation = new Quaternion();
+    #localPosition = new Vector3();      // Vector3
+    #localScale    = new Vector3(1,1,1); // Vector3
+    #localRotation = new Quaternion();   // Quaternion
 
-    #parent   = null; // Transform
-    #children = [];   // Transform[]
+    #worldPosition = new Vector3();      // Vector3
+    #worldScale    = new Vector3(1,1,1); // Vector3
+    #worldRotation = new Quaternion();   // Quaternion
 
-    #TRS; // TRS() cache
-    #dq;  // toDualQuaternion() cache
+    #parent   = null; // Transform.   부모 트랜스폼
+    #children = [];   // Transform[]. 자식 트랜스폼 목록
+
+    #worldDirty = false; // Boolean. World Transform 을 재계산해야 하는가?
+    #trsDirty   = false; // Boolean. TRS() cache 를 재계산해야 하는가?
+    #dqDirty    = false; // Boolean. toDualQuaternion() cache 를 재계산해야 하는가?
+
+    #trs = null; // TRS() cache
+    #dq  = null; // toDualQuaternion() cache
 
 
     /** Transform 의 이름을 나타내는 string 을 얻습니다. */
@@ -38,61 +43,65 @@ export class Transform {
 
     /** (this.world = parent.world · this.local) 임을 이용해, 자신의 world transform 을 계산합니다.
      * 
-     *  부모가 없다면 local transform == world transform 이 됩니다. world transform 이 수정되었으므로
+     *  부모가 없다면 local transform == world transform 입니다. parent.world 가 아직 계산되지 않았다면,
      * 
-     *  자신의 자식들의 world transform 또한 수정되어야 합니다. */
-    #calculateWorld() {
+     *  이 시점에서 parent.world 가 계산됩니다.
+     */
+    #computeWorld() {
         const parent = this.#parent;
 
-        const s0 = this.#localScale;
-        const q0 = this.#localRotation;
-        const t0 = this.#localPosition;
+        const s0 = this.#localScale;    // s0 : local scaling
+        const q0 = this.#localRotation; // q0 : local rotation
+        const t0 = this.#localPosition; // t0 : local translation
 
-        const s = this.#worldScale;
-        const q = this.#worldRotation;
-        const t = this.#worldPosition;
+        const s = this.#worldScale;    // s : world scaling
+        const q = this.#worldRotation; // q : world rotation
+        const t = this.#worldPosition; // t : world translation
 
-        this.#setDirty(); // TRS(), toDualQuaternion() 함수의 cache 는 더이상 유효하지 않게 된다.
+        this.#worldDirty = false; // world transform 을 재계산했음을 알린다.
 
-        if(this.#parent == null) { // 부모가 없다면, local transform == world transform.
-            s.assign(s0);          // s = s0
-            q.assign(q0);          // q = q0
-            t.assign(t0);          // t = t0
+        if(parent == null) { // 부모가 없다면, local transform == world transform.
+            s.assign(s0);    // s = s0
+            q.assign(q0);    // q = q0
+            t.assign(t0);    // t = t0
         }
         else {
-            const s1 = parent.#worldScale;
-            const q1 = parent.#worldRotation;
-            const t1 = parent.#worldPosition;
-        
+            const s1 = parent.#worldScale;    // s1 : the parent's world scaling
+            const q1 = parent.#worldRotation; // q1 : the parent's world rotation
+            const t1 = parent.#worldPosition; // t1 : the parent's world translation
+
+            if(parent.#worldDirty == true) { // parent.world 가 아직 최신값이 아니라면,
+                parent.#computeWorld();      // 이 시점에서 계산해준다.
+            }
+
             s0.mulVector(s1, s); // s = s0 * s1
             q0.mulQuat(q1, q);   // q = q1 * q0
 
             q1.mulVector(t0, t); // t = (q1·t0·q1*)
             t.mulVector(s1, t);  // t = (q1·t0·q1*)*s1
             t.add(t1, t);        // t = (q1·t0·q1*)*s1 + t1
-        }
-
-        this.#calculateChildrenWorld(); // 자신의 world transform 이 변경되었으므로,
-                                        // 자신의 자식들의 world transform 또한 재계산해야한다.
+        } 
     }
 
 
     /** (this.world = parent.world · this.local) 임을 이용해, 자신의 local transform 을 계산합니다.
      * 
-     *  부모가 없다면 local transform == world transform 이 됩니다. 자신의 world transform 은 변함 없기 때문에
+     *  부모가 없다면 local transform == world transform 입니다. 자신의 world transform 은 변함없기에,
      * 
-     *  자식들의 world transform 을 재계산할 필요는 없습니다.
+     *  자식들의 world transform 을 재계산할 필요가 없습니다. parent.world 가 아직 계산되지 않았다면,
+     * 
+     *  이 시점에서 parent.world 가 계산됩니다.
      */
-    #calculateLocal() {
+    #computeLocal() {
         const parent = this.#parent;
 
-        const s0 = this.#localScale;
-        const q0 = this.#localRotation;
-        const t0 = this.#localPosition;
+        const s0 = this.#localScale;    // s0 : local scaling
+        const q0 = this.#localRotation; // q0 : local rotation
+        const t0 = this.#localPosition; // t0 : local translation
 
-        const s = this.#worldScale;
-        const q = this.#worldRotation;
-        const t = this.#worldPosition;
+        const s = this.#worldScale;    // s : world scaling
+        const q = this.#worldRotation; // q : world rotation
+        const t = this.#worldPosition; // t : world translation
 
         if(this.#parent == null) { // 부모가 없다면, local transform == world transform
             s0.assign(s);          // s0 = s
@@ -101,9 +110,13 @@ export class Transform {
             return;
         }
         else {
-            const s1 = parent.#worldScale;
-            const q1 = parent.#worldRotation;
-            const t1 = parent.#worldPosition;
+            const s1 = parent.#worldScale;    // s1 : the parent's world scaling
+            const q1 = parent.#worldRotation; // q1 : the parent's world rotation
+            const t1 = parent.#worldPosition; // t1 : the parent's world translation
+
+            if(parent.#worldDirty == true) { // parent.world 가 아직 계산되지 않았다면,
+                parent.#computeWorld();      // 이 시점에서 재계산한다.
+            }
 
             const invq1 = q1.conjugate(Transform.#temp0); // q1* = q1^(-1)
 
@@ -117,24 +130,18 @@ export class Transform {
     }
 
 
-    /** 자식들의 world transform 을 재계산합니다. 이 함수는 자신의 world transform 이 변경되었다면 반드시 호출해야 합니다. */
-    #calculateChildrenWorld() {
+    /** 자식들의 worldDirty 플래그를 세팅합니다. World Transform 은 계산 결과가 필요한 시점에서 재계산됩니다. */
+    #propagateWorldDirty() {
         const count = this.#children.length;
 
         for(let i=0; i<count; ++i) {
-            this.#children[i].#calculateWorld();
-        }
-    }
+            const child = this.#children[i];
 
-
-    /** TRS(), toDualQuaternion() 의 cache 를 무효화시킵니다. cache 는 이후에 해당 함수를 호출할때 재계산됩니다. */
-    #setDirty() { 
-
-        if(this.#TRS) {
-            this.#TRS.basisW.w = NaN;
-        }
-        if(this.#dq) {
-            this.#dq.real.w = NaN;
+            if(child.#worldDirty == false) {
+                child.#worldDirty = true;
+                child.#propagateWorldDirty();
+                child.#invalidateCache();
+            }
         }
     }
 
@@ -142,24 +149,28 @@ export class Transform {
     /** TRS() 에서 사용할 cache 를 얻습니다. 할당되지 않았다면 Matrix4x4 를 할당합니다. */
     #getTRS() {
 
-        if(this.#TRS == undefined) {
-            this.#TRS = new Matrix4x4();
-            this.#setDirty();
+        if(this.#trs == null) {
+            this.#trs      = new Matrix4x4();
+            this.#trsDirty = true;
         }
-        return this.#TRS;
+        return this.#trs;
     }
 
 
     /** toDualQuaternion() 에서 사용할 cache 를 얻습니다. 할당되지 않았다면 DualQuaternion 을 할당합니다. */
     #getDQ() {
 
-        if(this.#dq == undefined) {
-            this.#dq = new DualQuaternion();
+        if(this.#dq == null) {
+            this.#dq       = new DualQuaternion();
             this.#dq.scale = Vector3.one;
-            this.#setDirty();
+            this.#dqDirty  = true;
         }
         return this.#dq;
     }
+
+
+    /** TRS(), toDualQuaternion() 에서 사용할 캐시를 무효화시킵니다. cache 는 이후에 해당 함수를 호출할때 재계산됩니다. */
+    #invalidateCache() { this.#trsDirty = this.#dqDirty = true; }
 
 
     ///////////////////////////
@@ -170,7 +181,7 @@ export class Transform {
     /** Transform 을 생성합니다. */
     constructor(name="Transform", scale, rotation, position) { 
         this.name = name;
-        this.#setDirty(); 
+        this.#invalidateCache();
 
         if(scale) {
             this.setWorldTransform(scale, rotation, position);
@@ -212,12 +223,19 @@ export class Transform {
     toDualQuaternion() {
         const cache = this.#getDQ();
 
-        if(Number.isNaN(cache.real.w)) {                                                     // cache.real.w == NaN 이라면, cache 가 무효화되었다는 의미.
+        if(this.#dqDirty == true) { // dqDirty == true 라면, cache 가 무효화되었다는 의미.
+
+            if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+                this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+            }
             DualQuaternion.rotateTranslate(this.#worldRotation, this.#worldPosition, cache); // 한번만 cache 를 재계산하며, 이후에는 캐싱된 듀얼 사원수를 돌려준다.
             cache.scale.assign(this.#worldScale);                                            // 특별히 Scaling 을 나타내는 Vector3 가 cache.scale 에 할당된다.
+
+            this.#dqDirty = false;
         }
         return cache;
     }
+
 
 
     /** (transformN.TRS() · ... · transform1.TRS() · transform0.TRS()) 의 결과를 나타내는 world transform 을 out 에 담아 돌려줍니다.
@@ -229,9 +247,13 @@ export class Transform {
         const length = transformsAndOut.length-1;
         const out    = transformsAndOut[length];
 
-        const s0 = Transform.#temp4.assign(this.#worldScale);
-        const q0 = Transform.#temp0.assign(this.#worldRotation);
-        const t0 = Transform.#temp5.assign(this.#worldPosition);
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+
+        const s0 = Transform.#temp4.assign(this.#worldScale);    // s0 : world scaling
+        const q0 = Transform.#temp0.assign(this.#worldRotation); // q0 : world rotation
+        const t0 = Transform.#temp5.assign(this.#worldPosition); // t0 : world translation
         
         for(let i=0; i<length; ++i) {
             const transform = transformsAndOut[i];
@@ -239,6 +261,10 @@ export class Transform {
             const s1 = transform.#worldScale;
             const q1 = transform.#worldRotation;
             const t1 = transform.#worldPosition;
+
+            if(transform.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+                transform.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+            }
 
             s0.mulVector(s1, s0); // s0 = s1 * s0
             q0.mulQuat(q1, q0);   // q0 = q1 · q0
@@ -248,13 +274,14 @@ export class Transform {
             t0.add(t1, t0);       // t0 = (q1·t0·q1*)*s1 + t1
         }
 
-        out.#worldScale.assign(s0);
-        out.#worldRotation.assign(q0);
-        out.#worldPosition.assign(t0);
+        out.#worldScale.assign(s0);    // out.worldScale    = s0
+        out.#worldRotation.assign(q0); // out.worldRotation = q0
+        out.#worldPosition.assign(t0); // out.worldPosition = t0
 
-        out.#calculateLocal();
-        out.#calculateChildrenWorld();
-        out.#setDirty();
+        out.#worldDirty = false;    // out 의 world transform 은 최신값이므로 재계산이 필요하지 않음
+        out.#computeLocal();        // out 의 local transform 을 재계산한다.
+        out.#propagateWorldDirty(); // out 의 자식들의 world transform 은 추후 재계산되어야 한다.
+        out.#invalidateCache();     // out 의 world transform 을 사용하는 cache 들을 무효화시킨다.
 
         return out;
     }
@@ -262,7 +289,7 @@ export class Transform {
 
     /** 트랜스폼의 역(inverse)을 나타내는 Transform 을 out 에 담아 돌려줍니다. 계층구조(parent, children)는 복사되지 않습니다.
      * 
-     *  기존의 TRS 의 결과가 R(p·s) + t 를 나타냈다면, 역을 취한 후의 TRS 는 R-1((p-t) / s) 를 돌려주게 됩니다. world transform 이
+     *  기존의 TRS 의 결과가 R(p·s) + t 를 나타냈다면, 역을 취한 후의 TRS 는 R-1((p-t) / s) 를 돌려주게 됩니다. out 은 world transform 이
      * 
      *  수정되었으므로, out 의 local transform 이 재계산됩니다. 또한 out 의 자식들의 world transform 또한 재계산됩니다.
      */
@@ -275,16 +302,21 @@ export class Transform {
         const q1 = out.#worldRotation;
         const t1 = out.#worldPosition;
 
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+
         q0.conjugate(q1);                  // q1 = q0*
         s1.assign(1/s0.x, 1/s0.y, 1/s0.z); // s1 = 1 / s0
 
-        t0.mulVector(s1, t1); // t1 = t0 * s1
-        t1.mulScalar(-1, t1); // t1 = -t0 * s0
-        q1.mulVector(t1, t1); // t1 = R-1(-t0 * s0)
+        t0.mulVector(s1, t1); // t1 = t0 / s0
+        t1.mulScalar(-1, t1); // t1 = -t0 * / s0
+        q1.mulVector(t1, t1); // t1 = R-1(-t0 / s0)
         
-        out.#calculateLocal();
-        out.#calculateChildrenWorld();
-        out.#setDirty();
+        out.#worldDirty = false;    // out 의 world transform 은 최신값이므로 재계산이 필요하지 않음 
+        out.#computeLocal();        // out 의 local transform 을 재계산한다.
+        out.#propagateWorldDirty(); // out 의 자식들의 world transform 은 추후 재계산되어야 한다.
+        out.#invalidateCache();     // out 의 world transform 을 사용하는 cache 들을 무효화시킨다.
 
         return out;
     }
@@ -298,10 +330,14 @@ export class Transform {
     TRS() {
         const cache = this.#getTRS();
 
-        if(Number.isNaN(cache.basisW.w)) { // cache.basisW.w == NaN 이라면, cache 가 무효화되었다는 의미.
+        if(this.#trsDirty == true) {       // trsDirty == true 라면, cache 가 무효화되었다는 의미.
             const s = this.#worldScale;    // 한번만 cache 를 재계산하며, 이후에는 캐싱된 행렬을 돌려준다.
             const q = this.#worldRotation;
             const t = this.#worldPosition;
+
+            if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+                this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+            }
 
             q.toMatrix4x4(cache); // cache.basisW.w 는 여기서 1 로 설정된다.
 
@@ -320,6 +356,8 @@ export class Transform {
             cache.basisW.x = t.x;
             cache.basisW.y = t.y;
             cache.basisW.z = t.z;
+
+            this.#trsDirty = false;
         }
         return cache;
     }
@@ -329,9 +367,13 @@ export class Transform {
      * 
      *  빈번히 사용되는 TRS() 와 다르게, invTRS() 는 Camera.view() 정도에서만 사용되므로 특별히 cache 를 유지하지 않습니다. */
     invTRS(out=new Matrix4x4()) {
-        const s    = this.#worldScale;
-        const invq = this.#worldRotation.conjugate(Transform.#temp0); // q*
-        const t    = this.#worldPosition;
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        const s    = this.#worldScale;                                // s    : world scaling
+        const invq = this.#worldRotation.conjugate(Transform.#temp0); // invq : inverse of world rotation (= q*)
+        const t    = this.#worldPosition;                             // t    : world translation
 
         const invS = Transform.#temp1;                   // 비례 행렬 S 의 역행렬 S^(-1)
         const invR = invq.toMatrix4x4(Transform.#temp2); // 회전 행렬 R 의 역행렬 R^(-1)
@@ -349,10 +391,10 @@ export class Transform {
     }
 
 
-    /** 자식 Transform 을 추가합니다. */
+    /** 자식 트랜스폼을 추가합니다. */
     addChild(newChild) {
         const index = this.#children.indexOf(newChild);
-
+        
         if(index == -1) {           // newChild 가 중복되지 않는다면, 자신의 자식으로 추가한다.
             newChild.parent = this; // parent getter 에서 newChild 의 local transform 을 재계산한다.
         }
@@ -372,11 +414,21 @@ export class Transform {
     getChild(index) { return this.#children[index]; }
 
 
-    /** local transform 을 설정합니다. local transform 이 수정되었으니, 자신의 world transform 이 재계산됩니다.
+
+     /** local transform 을 설정합니다. local transform 이 수정되었으니, 자신의 world transform 이 재계산됩니다.
      * 
      *  또한 자식들의 world transform 도 재계산됩니다. 비례,회전,이동을 한꺼번에 수정해야 한다면, localScale, localRotation,
      * 
-     *  localPosition 을 따로 호출하는 것보다 setLocalTransform 을 한번 호출하는 것이 더 빠릅니다.
+     *  localPosition 을 따로 호출하는 것보다 setLocalTransform 을 한번 호출하는 것이 더 빠릅니다. 
+     * 
+     *  해당 함수는 다음 세가지 방식으로 호출할 수 있습니다:
+     *  
+     * 
+     *  1) setLocalTransform(transform)
+     * 
+     *  2) setLocalTransform(TRS), 
+     * 
+     *  3) setLocalTransform(newScale, newRotation, newPosition)
      */
     setLocalTransform(newScale, newRotation, newPosition) {
 
@@ -410,11 +462,13 @@ export class Transform {
             }
         }
         
-        this.#localScale.assign(newScale);
-        this.#localRotation.assign(newRotation);
-        this.#localPosition.assign(newPosition);
+        this.#localScale.assign(newScale);       // localScale    = newScale
+        this.#localRotation.assign(newRotation); // localRotation = newRotation
+        this.#localPosition.assign(newPosition); // localPosition = newPosition
 
-        this.#calculateWorld();
+        this.#worldDirty = true;     // 자신의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // world transform 을 사용하는 cache 들을 무효화시킨다.
     }
 
 
@@ -423,6 +477,15 @@ export class Transform {
      *  또한 자식들의 world transform 도 재계산됩니다. 비례,회전,이동을 한꺼번에 수정해야 한다면, scale, rotation,
      * 
      *  position 을 따로 호출하는 것보다 setWorldTransform 을 한번 호출하는 것이 더 빠릅니다.
+     * 
+     *  해당 함수는 다음 세가지 방식으로 호출할 수 있습니다:
+     * 
+     * 
+     *  1) setWorldTransform(transform)
+     * 
+     *  2) setWorldTransform(TRS)
+     * 
+     *  3) setWorldTransform(newScale, newRotation, newPosition)
      */
     setWorldTransform(newScale, newRotation, newPosition) {
 
@@ -432,6 +495,9 @@ export class Transform {
             if(newScale instanceof Transform) {
                 const transform = newScale;
 
+                if(transform.#worldDirty == true) { // 인자로 받은 transform 의 world transform 이 아직 
+                    transform.#computeWorld();      // 재계산되지 않았다면, computeWorld 를 호출한다.
+                }
                 newScale    = transform.#worldScale;
                 newRotation = transform.#worldRotation;
                 newPosition = transform.#worldPosition;
@@ -455,43 +521,40 @@ export class Transform {
                 newRotation = TRS.toQuaternion(); // TRS 를 3x3 행렬로 취급하고, Quaternion 으로 변환한다.
             }
         }
-        this.#worldScale.assign(newScale);
-        this.#worldRotation.assign(newRotation);
-        this.#worldPosition.assign(newPosition);
+        this.#worldScale.assign(newScale);       // worldScale    = newScale
+        this.#worldRotation.assign(newRotation); // worldRotation = newRotation
+        this.#worldPosition.assign(newPosition); // worldPosition = newPosition
 
-        this.#calculateLocal();
-        this.#calculateChildrenWorld();
-        this.#setDirty();
+        this.#worldDirty = false;    // world transform 은 최신값이므로 재계산될 필요가 없음.
+        this.#computeLocal();        // local transform 을 재계산한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // world transform 을 사용하는 cache 들을 무효화시킨다.
     }
 
 
-    /** 부모 Transform 을 얻습니다. 부모가 없다면 null 을 돌려줍니다. 부모가 변경되었다고
-     * 
-     *  자신의 world transform 이 수정되지는 않습니다. 대신 parent space 에 들어왔으므로
-     * 
-     *  자신의 local transform 이 재계산됩니다. */
+
+
+    /** 부모 트랜스폼을 얻습니다. 부모가 없다면 null 을 돌려줍니다. */
     get parent() { return this.#parent; }
-    set parent(newParent=null) {
+    set parent(newParent) {
         const oldParent = this.#parent;
-        
-        if(newParent == this.#parent) { // newParent 와 이미 부모-자식 관계라면
-            return;                     // 바로 함수를 종료한다.
+
+        if(newParent == this.#parent) return; // 이미 부모-자식 관계라면 리턴.
+        if(newParent == this)         return; // 자기자신이 자신의 부모일 수는 없음.
+
+        if(this.#worldDirty == true) { // 아직 자신의 World Transform 이 계산되지 않았다면,
+            this.#computeWorld();      // oldParent 와의 관계를 이용하여 자신의 World Transform 을 계산한다.
         }
-        if(newParent == this) { // 자기자신이 자신의 부모가 될 수는 없으므로
-            return;             // 바로 함수를 종료한다.
+        if(oldParent != null) {
+            const index = oldParent.#children.indexOf(this); // oldParent 의 자식 목록에서 this 를 제거한다. 
+            oldParent.#children.splice(index, 1);            // 일시적으로 this 는 루트 트랜스폼이 된다.
         }
 
-        if(this.#parent != null) {                           // 다른 부모가 존재한다면, 기존의 부모는
-            const index = oldParent.#children.indexOf(this); // 자식 목록에서 this 를 제거한다.
-            oldParent.#children.splice(index, 1);
-        }
-        this.#parent = newParent; // 새로운 부모를 등록한다.
-
-        if(newParent != null) {                // 새로운 부모는 자식 목록에
-            this.#parent.#children.push(this); // this 를 추가한다.
+        if(this.#parent = newParent) {         // 새로운 부모를 설정하는 경우, 
+            this.#parent.#children.push(this); // 새로운 부모는 자식 목록에 this 를 추가한다.
         }
 
-        this.#calculateLocal(); // 자신의 local transform 을 재계산한다.
+        this.#computeLocal(); // local transform 을 재계산한다.
     }
 
 
@@ -499,87 +562,146 @@ export class Transform {
     get childCount() { return this.#children.length; }
 
 
-    /** world scale 을 나타내는 Vector3 를 얻습니다. 항상 복사본을 돌려줌에 유의하시길 바랍니다.
+    /** world scaling 을 나타내는 Vector3 를 얻습니다. getter 는 항상 복사본을 돌려줌에 유의하시길 바랍니다. 
      * 
-     *  world scale 을 설정하는 경우, world transform 이 수정되었으니, local transform 이 재계산됩니다.
+     *  setter 는 인자로 받은 newScale 을 그대로 돌려줍니다. world scale 을 설정하는 경우
      * 
-     *  또한 자식들의 world transform 도 재계산됩니다. */
-    get scale() { return this.#worldScale.clone(); }
+     *  world transform 이 수정되었으니, local transform 이 재계산됩니다. 또한 자식들의 world transform 도 재계산됩니다. */
+    get scale() { 
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        return this.#worldScale.clone(); 
+    }
     set scale(newScale) {
-        this.#worldScale.assign(newScale);
-        this.#calculateLocal();
-        this.#calculateChildrenWorld();
-        this.#setDirty();
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        this.#worldScale.assign(newScale); // worldScale = newScale
+
+        this.#computeLocal();        // local transform 을 재계산한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // TRS(), toDualQuaternion() 의 cache 를 무효화한다.
+        
         return newScale;
     }
 
 
-    /** world rotation 을 나타내는 Quaternion 을 얻습니다. 항상 복사본을 돌려줌에 유의하시길 바랍니다.
+    /** world rotation 을 나타내는 Quaternion 을 얻습니다. getter 는 항상 복사본을 돌려줌에 유의하시길 바랍니다.
      * 
-     *  world rotation 을 설정하는 경우, world transform 이 수정되었으니, local transform 이 재계산됩니다.
+     *  setter 는 인자로 받은 newRotation 을 그대로 돌려줍니다. world rotation 을 설정하는 경우
      * 
-     *  또한 자식들의 world transform 도 재계산됩니다. */
-    get rotation() { return this.#worldRotation.clone(); }
-    set rotation(newQuat) {
-        this.#worldRotation.assign(newQuat);
-        this.#calculateLocal();
-        this.#calculateChildrenWorld();
-        this.#setDirty();
-        return newQuat;
+     *  world transform 이 수정되었으니, local transform 이 재계산됩니다. 또한 자식들의 world transform 도 재계산됩니다. */
+    get rotation() {
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        return this.#worldRotation.clone();
+    }
+    set rotation(newRotation) {
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        this.#worldRotation.assign(newRotation); // worldRotation = newRotation
+
+        this.#computeLocal();        // local transform 을 재계산한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // TRS(), toDualQuaternion() 의 cache 를 무효화한다.
+
+        return newRotation;
     }
 
 
-    /** world position 을 나타내는 Vector3 를 얻습니다. 항상 복사본을 돌려줌에 유의하시길 바랍니다. 
+    /** world position 을 나타내는 Vector3 를 얻습니다. getter 는 항상 복사본을 돌려줌에 유의하시길 바랍니다. 
      * 
-     *  world position 을 설정하는 경우 world transform 이 수정되었으니, local transform 이 재계산됩니다. 
+     *  setter 는 인자로 받은 newPosition 을 그대로 돌려줍니다. world position 을 설정하는 경우
      * 
-     *  또한 자식들의 world transform 도 재계산됩니다. */
-    get position() { return this.#worldPosition.clone(); }
+     *  world transform 이 수정되었으니, local transform 이 재계산됩니다. 또한 자식들의 world transform 도 재계산됩니다. */
+    get position() {
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        return this.#worldPosition.clone();
+    }
     set position(newPosition) {
-        this.#worldPosition.assign(newPosition);
-        this.#calculateLocal();
-        this.#calculateChildrenWorld();
-        this.#setDirty();
-        return newPosition;
+
+        if(this.#worldDirty == true) { // world transform 이 아직 계산되지 않았다면,
+            this.#computeWorld();      // 이 시점에서 computeWorld 를 호출한다.
+        }
+        this.#worldPosition.assign(newPosition); // worldPosition = newPosition
+
+        this.#computeLocal();        // local transform 을 재계산한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // TRS(), toDualQuaternion() 의 cache 를 무효화한다.
     }
 
 
-    /** local scale 을 나타내는 Vector3 를 얻습니다. 항상 복사본을 돌려줌에 유의하시길 바랍니다.
+    /** local scaling 을 나타내는 Vector3 를 얻습니다. getter 는 항상 복사본을 돌려줌에 유의하시길 바랍니다.
      * 
-     *  local scale 을 설정하는 경우 local transform 이 수정되었으니, 자신의 world transform 이 재계산됩니다.
+     *  setter 는 인자로 받은 newScale 을 그대로 돌려줍니다. local scaling 을 설정하는 경우
      * 
-     *  또한 자식들의 world transform 도 재계산됩니다. */
+     *  local transform 이 수정되었으니, world transform 이 재계산됩니다. 또한 자식들의 world transform 도 재계산됩니다. */
     get localScale() { return this.#localScale.clone(); }
-    set localScale(newScale) { 
-        this.#localScale.assign(newScale);
-        this.#calculateWorld();
+    set localScale(newScale) {
+        this.#localScale.assign(newScale); // localScale = newScale
+
+        this.#worldDirty = true;     // 자신의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // TRS(), toDualQuaternion() 의 cache 를 무효화한다.
+
         return newScale;
     }
 
 
-    /** local rotation 을 나타내는 Quaternion 을 얻습니다. 항상 복사본을 돌려줌에 유의하시길 바랍니다.
+    /** local rotation 을 나타내는 Quaternion 을 얻습니다. getter 는 항상 복사본을 돌려줌에 유의하시길 바랍니다.
      * 
-     *  local rotation 을 설정하는 경우 local transform 이 수정되었으니, 자신의 world transform 이 재계산됩니다.
+     *  setter 는 인자로 받은 newRotation 을 그대로 돌려줍니다. local rotation 을 설정하는 경우
      * 
-     *  또한 자식들의 world transform 도 재계산됩니다. */
+     *  local transform 이 수정되었으니, world transform 이 재계산됩니다. 또한 자식들의 world transform 도 재계산됩니다.
+     */
     get localRotation() { return this.#localRotation.clone(); }
-    set localRotation(newQuat) { 
-        this.#localRotation.assign(newQuat);
-        this.#calculateWorld();
-        return newQuat;
+    set localRotation(newRotation) {
+        this.#localRotation.assign(newRotation); // localRotation = newRotation
+
+        this.#worldDirty = true;     // 자신의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // TRS(), toDualQuaternion() 의 cache 를 무효화한다.
+
+        return newRotation;
     }
 
 
-    /** local position 을 나타내는 Vector3 를 얻습니다. 항상 복사본을 돌려줌에 유의하시길 바랍니다.
+    /** local position 을 나타내는 Vector3 를 얻습니다. getter 는 항상 복사본을 돌려줌에 유의하시길 바랍니다.
      * 
-     *  local position 을 설정하는 경우 local transform 이 수정되었으니, 자신의 world transform 이 재계산됩니다.
+     *  setter 는 인자로 받은 newPosition 을 그대로 돌려줍니다. local position 을 설정하는 경우
      * 
-     *  또한 자식들의 world transform 도 재계산됩니다. */
+     *  local transform 이 수정되었으니, world transform 이 재계산됩니다. 또한 자식들의 world transform 도 재계산됩니다.
+     */
     get localPosition() { return this.#localPosition.clone(); }
     set localPosition(newPosition) {
-        this.#localPosition.assign(newPosition);
-        this.#calculateWorld();
+        this.#localPosition.assign(newPosition); // localPosition = newPosition
+
+        this.#worldDirty = true;     // 자신의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#propagateWorldDirty(); // 자식들의 world transform 은 계산결과가 필요한 시점에 재계산되어야 한다.
+        this.#invalidateCache();     // TRS(), toDualQuaternion() 의 cache 를 무효화한다.
+
         return newPosition;
+    }
+
+
+    /** 루트 트랜스폼을 얻습니다 */
+    get root() {
+        let result = this;
+
+        while(result.#parent != null) {
+            result = result.#parent;
+        }
+        return result;
     }
 
 
@@ -596,7 +718,7 @@ export class Transform {
                 const child = transform.#children[i];
 
                 ret += tab0 + "\n";
-                ret += tab1 + `  |____"${child.name}"\n`;
+                ret += tab1 + `  |____"${child.name} (worldDirty = ${child.#worldDirty})"\n`;
                 tab1 += "  |    ";
 
                 dfs(child);
@@ -608,4 +730,4 @@ export class Transform {
         dfs(this);
         return ret;
     }
-};
+}

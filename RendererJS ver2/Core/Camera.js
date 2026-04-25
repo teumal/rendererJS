@@ -114,7 +114,7 @@ export class Camera {
     }
 
 
-    /** 스크린 좌표를 월드 좌표로 변환합니다. 결과는 Vector3 이며 out 에 담아 돌려줍니다. out.z 는 0 으로 설정됩니다. */
+    /** 스크린 좌표를 월드 좌표로 변환합니다. 결과는 Vector3 이며 out 에 담아 돌려줍니다. out.z 는 zNear 로 설정됩니다. */
     screenToWorld(screenPos, out=new Vector3()) {
         const halfw = this.width * 0.5;
         const halfh = this.height * 0.5;
@@ -122,7 +122,7 @@ export class Camera {
         return out.assign(
             screenPos.x - halfw - this.sx,
             -(screenPos.y - halfh - this.sy),
-            0
+            this.zNear
         );
     }
 

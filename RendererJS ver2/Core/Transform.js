@@ -77,9 +77,9 @@ export class Transform {
             s0.mulVector(s1, s); // s = s0 * s1
             q0.mulQuat(q1, q);   // q = q1 * q0
 
-            q1.mulVector(t0, t); // t = (q1·t0·q1*)
-            t.mulVector(s1, t);  // t = (q1·t0·q1*)*s1
-            t.add(t1, t);        // t = (q1·t0·q1*)*s1 + t1
+            t0.mulVector(s1, t); // t = t0 * s1
+            q1.mulVector(t, t);  // t = q1·(t0 * s1)·q1*
+            t.add(t1, t);        // t = q1·(t0 * s1)·q1* + t1
         } 
     }
 
@@ -124,8 +124,8 @@ export class Transform {
             q.mulQuat(invq1, q0); // q0 = (q1*·q)
 
             t.sub(t1, t0);           // t0 = (t - t1)
-            t0.divVector(s1, t0);    // t0 = (t - t1) / s1
-            invq1.mulVector(t0, t0); // t0 = q1* · ((t - t1) / s1) · q1
+            invq1.mulVector(t0, t0); // t0 = q1* · (t - t1) · q1
+            t0.divVector(s1, t0);    // t0 = (q1* · (t - t1) · q1) / s1
         }
     }
 
@@ -718,7 +718,7 @@ export class Transform {
                 const child = transform.#children[i];
 
                 ret += tab0 + "\n";
-                ret += tab1 + `  |____"${child.name} (worldDirty = ${child.#worldDirty})"\n`;
+                ret += tab1 + `  |____"${child.name}"\n`;
                 tab1 += "  |    ";
 
                 dfs(child);

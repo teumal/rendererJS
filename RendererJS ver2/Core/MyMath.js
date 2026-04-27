@@ -692,6 +692,28 @@ export class Vector4 {
             this.w * v.w
         );
     }
+
+
+    /** 정규화한 벡터를 out 에 담아 돌려줍니다. */
+    normalize(out=new Vector3()) {
+        const invSize = 1.0 / this.magnitude;
+        return this.mulScalar(invSize, out);
+    }
+
+
+    /** 벡터의 크기의 제곱을 돌려줍니다. 결과는 number 입니다. */
+    get sqrMagnitude() { return Vector4.dot(this,this); }
+
+
+    /** 벡터의 크기를 돌려줍니다. 결과는 number 입니다. */
+    get magnitude() { return Math.sqrt(this.sqrMagnitude); }
+
+
+    /** 정규화한 벡터를 돌려줍니다. 결과는 Vector3 입니다. */
+    get normalized() {
+        const invSize = 1.0 / this.magnitude;
+        return this.mulScalar(invSize);
+    }
 };
 
 
@@ -888,7 +910,7 @@ export class Matrix4x4 {
     }
 
 
-    /** 전치 행렬을 나타내는 Matrix4x4 를 out 에 담아 돌려줍니다. */
+    /** 전치 행렬 M^T 을 나타내는 Matrix4x4 를 out 에 담아 돌려줍니다. */
     transpose(out = new Matrix4x4()) {
         const m0  = this.m0,  m1  = this.m1,  m2  = this.m2,  m3  = this.m3;
         const m4  = this.m4,  m5  = this.m5,  m6  = this.m6,  m7  = this.m7;
